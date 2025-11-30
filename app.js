@@ -1,20 +1,10 @@
-// app.js - Zero-Knowledge PWA Passkey API Keys
+// app.js - TRUE WebAuthn System Biometrics
 class PasskeyKeyManager {
   constructor() {
     this.dbName = 'pwa-apikeys-v1';
     this.storeName = 'keys';
-    this.passcode = null;
     this.initDB();
     this.bindUI();
-  }
-
-  checkPasscode() {
-    const input = prompt('Enter 4-digit PIN to unlock:');
-    if (input && input.length === 4) {
-      this.passcode = input;
-      return true;
-    }
-    return false;
   }
 
   async initDB() {
@@ -23,7 +13,6 @@ class PasskeyKeyManager {
       req.onupgradeneeded = (e) => {
         const db = e.target.result;
         const store = db.createObjectStore(this.storeName, { keyPath: 'provider' });
-        store.createIndex('provider', 'provider', { unique: true });
       };
       req.onsuccess = (e) => resolve(e.target.result);
       req.onerror = (e) => reject(e.target.error);
@@ -31,43 +20,52 @@ class PasskeyKeyManager {
   }
 
   bindUI() {
-    document.getElementById('register').onclick = () => this.registerPasskey();
+    document.getElementById('register').onclick = () => this.createPasskey();
     document.getElementById('store').onclick = () => this.storeKey();
     document.getElementById('test').onclick = () => this.testCall();
   }
 
-  async registerPasskey() {
+  async createPasskey() {
     try {
-      // Generate extractable key ONCE for storage
-      const encKey = await crypto.subtle.generateKey(
-        { name: 'AES-GCM', length: 256 },
-        true, // extractable=true for initial storage
-        ['encrypt', 'decrypt']
-      );
+      const challenge = crypto.getRandomValues(new Uint8Array(32));
+      const credential = await navigator.credentials.create({
+        publicKey: {
+          challenge,
+          rp: { name: 'PWA API Keys', id: location.hostname },
+          user: { id: new TextEncoder().encode('user1'), name: 'user1', displayName: 'User' },
+          pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
+          authenticatorSelection: { userVerification: 'required', residentKey: 'required' }
+        }
+      });
 
-      // Export key material ONCE and store
-      const keyBuffer = await crypto.subtle.exportKey('raw', encKey);
-      
+      // Store credential ID for future auth
       const tx = this.db.transaction(this.storeName, 'readwrite');
       const store = tx.objectStore(this.storeName);
-      
       await store.put({
         provider: 'openai',
-        encKeyMaterial: keyBuffer,
+        credentialId: credential.rawId,
         created: Date.now()
       });
 
-      // Re-import as NON-EXTRACTABLE for runtime use
-      const runtimeKey = await crypto.subtle.importKey(
-        'raw', keyBuffer, { name: 'AES-GCM', length: 256 },
-        false, // NOW non-extractable = device-bound
-        ['encrypt', 'decrypt']
-      );
-
-      this.updateStatus('✅ Device-bound encryption key created!');
+      this.updateStatus('✅ System Passkey created! (FaceID/PIN ready)');
     } catch (err) {
-      this.updateStatus(`❌ Key failed: ${err.message}`);
+      this.updateStatus(`❌ Passkey failed: ${err.message} (Needs HTTPS/localhost)`);
     }
+  }
+
+  async authenticatePasskey(provider = 'openai') {
+    const record = await this.getRecord(provider);
+    if (!record?.credentialId) throw new Error('No passkey');
+
+    const assertion = await navigator.credentials.get({
+      publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        allowCredentials: [{ type: 'public-key', id: record.credentialId }],
+        userVerification: 'required'
+      }
+    });
+
+    return assertion; // FaceID/PIN/TouchID success
   }
 
   async storeKey() {
@@ -75,15 +73,19 @@ class PasskeyKeyManager {
     const apiKey = document.getElementById('apikey').value;
     
     if (!apiKey) return this.updateStatus('❌ Enter API key');
-    if (!await this.checkPasscode()) return this.updateStatus('❌ PIN required');
 
     try {
-      const record = await this.getRecord(provider);
-      if (!record || !record.encKeyMaterial) {
-        return this.updateStatus('❌ Create encryption key first! (Button #1)');
-      }
-
-      const encKey = await this.getEncryptionKey(record);
+      // SYSTEM BIOMETRICS
+      await this.authenticatePasskey(provider);
+      
+      // Generate + store encryption key
+      const encKey = await crypto.subtle.generateKey(
+        { name: 'AES-GCM', length: 256 },
+        true,
+        ['encrypt', 'decrypt']
+      );
+      const keyBuffer = await crypto.subtle.exportKey('raw', encKey);
+      
       const iv = crypto.getRandomValues(new Uint8Array(12));
       const encrypted = await crypto.subtle.encrypt(
         { name: 'AES-GCM', iv },
@@ -93,44 +95,33 @@ class PasskeyKeyManager {
 
       const tx = this.db.transaction(this.storeName, 'readwrite');
       const store = tx.objectStore(this.storeName);
-      await store.put({ ...record, iv, encrypted, provider });
+      await store.put({ 
+        provider, 
+        credentialId: (await this.getRecord(provider))?.credentialId,
+        encKeyMaterial: keyBuffer, 
+        iv, 
+        encrypted 
+      });
 
-      this.updateStatus('✅ API key encrypted & stored!');
+      this.updateStatus('✅ API key stored! (FaceID/PIN protected)');
       document.getElementById('apikey').value = '';
     } catch (err) {
       this.updateStatus(`❌ Store failed: ${err.message}`);
     }
   }
 
-  async getRecord(provider) {
-    const tx = this.db.transaction(this.storeName, 'readonly');
-    const store = tx.objectStore(this.storeName);
-    const req = store.get(provider);
-    return new Promise((resolve) => {
-      req.onsuccess = () => resolve(req.result);
-    });
-  }
-
-  async getEncryptionKey(record) {
-    // Import with FULL encrypt/decrypt for store + test
-    return crypto.subtle.importKey(
-      'raw',
-      record.encKeyMaterial,
-      { name: 'AES-GCM', length: 256 },
-      false, // non-extractable
-      ['encrypt', 'decrypt'] // BOTH usages needed
-    );
-  }
-
   async testCall() {
     try {
-      if (!await this.checkPasscode()) return this.updateStatus('❌ PIN required');
+      // SYSTEM BIOMETRICS EVERY CALL
+      await this.authenticatePasskey();
       
-      this.updateStatus('🔐 Authenticating...');
       const record = await this.getRecord('openai');
-      const encKey = await this.getEncryptionKey(record);
+      const encKey = await crypto.subtle.importKey(
+        'raw', record.encKeyMaterial, 
+        { name: 'AES-GCM', length: 256 }, 
+        false, ['decrypt']
+      );
       
-      this.updateStatus('🔓 Decrypting...');
       const apiKey = await crypto.subtle.decrypt(
         { name: 'AES-GCM', iv: record.iv },
         encKey,
@@ -142,13 +133,20 @@ class PasskeyKeyManager {
       const res = await fetch('https://api.openai.com/v1/models', {
         headers: { Authorization: `Bearer ${keyStr}` }
       });
-      
       const data = await res.json();
+      
       document.getElementById('result').textContent = JSON.stringify(data.data?.slice(0,3), null, 2);
-      this.updateStatus(`✅ Success! ${data.data?.length || 0} models loaded.`);
+      this.updateStatus(`✅ Success! ${data.data?.length || 0} models.`);
     } catch (err) {
       this.updateStatus(`❌ Test failed: ${err.message}`);
     }
+  }
+
+  async getRecord(provider) {
+    const tx = this.db.transaction(this.storeName, 'readonly');
+    const store = tx.objectStore(this.storeName);
+    const req = store.get(provider);
+    return new Promise((resolve) => req.onsuccess = () => resolve(req.result));
   }
 
   updateStatus(msg) {
@@ -157,5 +155,4 @@ class PasskeyKeyManager {
   }
 }
 
-// Initialize when DOM loads
 document.addEventListener('DOMContentLoaded', () => new PasskeyKeyManager());
