@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PWA Passkey API Keys</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#000000">
+  <style>body{font-family:system-ui;padding:2rem;max-width:600px;margin:0 auto;}</style>
+</head>
+<body>
+  <h1>🗝️ Zero-Knowledge API Keys</h1>
+  <div id="status">Ready</div>
+  <button id="register">1. Create Passkey</button>
+  <input id="provider" placeholder="openai" style="margin:1rem 0;width:100%;padding:.5rem;">
+  <input id="apikey" type="password" placeholder="sk-..." style="margin:1rem 0;width:100%;padding:.5rem;">
+  <button id="store">2. Store API Key</button>
+  <button id="test">3. Test Call</button>
+  <pre id="result"></pre>
+  <script type="module" src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>
