@@ -57,6 +57,15 @@ export const CRYPTO_CONFIG = {
 };
 
 /**
+ * Session configuration
+ */
+export const SESSION_CONFIG = {
+  defaultDuration: 15 * 60 * 1000, // 15 minutes
+  warningThreshold: 2 * 60 * 1000, // 2 minutes - show warning when time remaining < this
+  updateInterval: 1000 // 1 second - UI countdown update interval
+};
+
+/**
  * Application configuration
  */
 export const APP_CONFIG = {
