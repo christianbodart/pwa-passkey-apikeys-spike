@@ -6,14 +6,47 @@ import { StorageService } from '../../src/storage.js';
 import { KeyManager } from '../../src/key-manager.js';
 import { PasskeyService } from '../../src/passkey-service.js';
 import { ProviderService } from '../../src/providers.js';
+import { CapabilityDetector } from '../../src/capability-detector.js';
 import 'fake-indexeddb/auto';
 
 describe('Session Flow Integration', () => {
   let manager;
   let mockPasskeyService;
+  let mockCapabilityDetector;
 
   beforeEach(async () => {
     vi.useFakeTimers();
+
+    // Mock CapabilityDetector to always return green tier
+    mockCapabilityDetector = {
+      detect: vi.fn().mockReturnValue({
+        webauthn: true,
+        subtleCrypto: true,
+        visibilityApi: true,
+        indexedDB: true,
+        timestamp: Date.now()
+      }),
+      getTier: vi.fn().mockReturnValue('green'),
+      getRecommendedConfig: vi.fn().mockReturnValue({
+        sessionDuration: 15 * 60 * 1000,
+        maxOperations: Infinity,
+        autoLock: true
+      }),
+      getStatus: vi.fn().mockReturnValue({
+        emoji: '🔒',
+        title: 'Maximum Security',
+        description: 'Test mode',
+        color: '#4caf50',
+        warnings: []
+      }),
+      getAnalytics: vi.fn().mockReturnValue({
+        tier: 'green',
+        webauthn: true,
+        subtleCrypto: true,
+        visibilityApi: true,
+        indexedDB: true
+      })
+    };
 
     // Mock PasskeyService
     mockPasskeyService = {
@@ -31,7 +64,8 @@ describe('Session Flow Integration', () => {
       keyManager: new KeyManager(),
       providerService: new ProviderService(),
       passkeyService: mockPasskeyService,
-      sessionManager: new SessionManager()
+      sessionManager: new SessionManager(),
+      capabilityDetector: mockCapabilityDetector
     });
 
     await manager.init();
@@ -196,6 +230,24 @@ describe('Session Flow Integration', () => {
       expect(await manager.retrieveKey('openai')).toBe('sk-openai-key');
       expect(await manager.retrieveKey('anthropic')).toBe('sk-anthropic-key');
       expect(mockPasskeyService.authenticate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Capability Detection', () => {
+    it('emits capabilityDetected event on init', async () => {
+      // Already initialized in beforeEach, check that mock was called
+      expect(mockCapabilityDetector.detect).toHaveBeenCalled();
+      expect(mockCapabilityDetector.getTier).toHaveBeenCalled();
+    });
+
+    it('provides capability information', () => {
+      const capInfo = manager.getCapabilities();
+
+      expect(capInfo).toHaveProperty('capabilities');
+      expect(capInfo).toHaveProperty('tier');
+      expect(capInfo).toHaveProperty('status');
+      expect(capInfo).toHaveProperty('config');
+      expect(capInfo).toHaveProperty('isBlocked');
     });
   });
 });

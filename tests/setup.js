@@ -1,75 +1,43 @@
-// tests/setup.js
-import 'fake-indexeddb/auto';
-import { webcrypto } from 'node:crypto';
+// tests/setup.js - Global test setup
 import { vi } from 'vitest';
-import { TextEncoder as NUTextEncoder, TextDecoder as NUTextDecoder } from 'node:util';
+import 'fake-indexeddb/auto';
 
-// Mock Web Crypto API using Object.defineProperty
-if (!globalThis.crypto) {
-  Object.defineProperty(globalThis, 'crypto', {
-    value: webcrypto,
-    writable: false,
-    configurable: true
-  });
+// Mock WebAuthn API
+global.PublicKeyCredential = class PublicKeyCredential {
+  static isConditionalMediationAvailable() {
+    return Promise.resolve(true);
+  }
+};
+
+// Mock navigator.credentials
+global.navigator.credentials = {
+  create: vi.fn(),
+  get: vi.fn()
+};
+
+// Mock crypto API (happy-dom provides this, but ensure it's complete)
+if (!global.crypto.subtle) {
+  global.crypto.subtle = crypto.subtle;
 }
 
-// Mock TextEncoder/TextDecoder (needed for crypto operations)
-if (!globalThis.TextEncoder) {
-  
-  Object.defineProperty(globalThis, 'TextEncoder', {
-    value: NUTextEncoder,
-    writable: false,
-    configurable: true
-  });
-  Object.defineProperty(globalThis, 'TextDecoder', {
-    value: NUTextDecoder,
-    writable: false,
-    configurable: true
-  });
+// Mock location
+if (!global.location) {
+  global.location = {
+    hostname: 'localhost',
+    protocol: 'https:',
+    href: 'https://localhost/'
+  };
 }
 
-// Mock navigator with credentials API
-if (!globalThis.navigator) {
-  Object.defineProperty(globalThis, 'navigator', {
-    value: {},
+// Mock document.visibilityState
+if (!global.document.visibilityState) {
+  Object.defineProperty(global.document, 'visibilityState', {
+    value: 'visible',
     writable: true,
     configurable: true
   });
 }
 
-Object.defineProperty(globalThis.navigator, 'credentials', {
-  value: {
-    create: vi.fn(),
-    get: vi.fn()
-  },
-  writable: true,
-  configurable: true
-});
-
-// Mock location for passkey RP ID
-if (!globalThis.location) {
-  Object.defineProperty(globalThis, 'location', {
-    value: { 
-      hostname: 'localhost',
-      href: 'http://localhost:3000'
-    },
-    writable: true,
-    configurable: true
-  });
-}
-
-// Mock document for DOM interactions
-if (!globalThis.document) {
-  Object.defineProperty(globalThis, 'document', {
-    value: {
-      getElementById: vi.fn((id) => ({
-        onclick: null,
-        textContent: '',
-        value: ''
-      })),
-      addEventListener: vi.fn()
-    },
-    writable: true,
-    configurable: true
-  });
-}
+// Suppress console errors in tests (optional)
+// global.console.error = vi.fn();
+// global.console.warn = vi.fn();
