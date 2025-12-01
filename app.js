@@ -96,6 +96,10 @@ class PasskeyKeyManager {
     try {
       await this.authenticatePasskey(provider);
       
+      // ✅ Get credential ID BEFORE the transaction
+      const existingRecord = await this.getRecord(provider);
+      const credentialId = existingRecord?.credentialId;
+      
       const encKey = await crypto.subtle.generateKey(
         { name: 'AES-GCM', length: 256 },
         true,
@@ -116,7 +120,7 @@ class PasskeyKeyManager {
         const store = tx.objectStore(this.storeName);
         const req = store.put({ 
           provider, 
-          credentialId: (await this.getRecord(provider))?.credentialId,
+          credentialId,
           encKeyMaterial: keyBuffer, 
           iv, 
           encrypted 
