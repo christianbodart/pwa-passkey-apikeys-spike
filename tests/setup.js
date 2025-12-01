@@ -12,24 +12,63 @@ if (!globalThis.crypto) {
   });
 }
 
-// Mock WebAuthn navigator.credentials
-if (!globalThis.navigator) {
-  globalThis.navigator = {};
-}
-
-globalThis.navigator.credentials = {
-  create: vi.fn(),
-  get: vi.fn()
-};
-
-// Mock location for passkey RP ID
-if (!globalThis.location) {
-  globalThis.location = { hostname: 'localhost' };
-}
-
 // Mock TextEncoder/TextDecoder (needed for crypto operations)
 if (!globalThis.TextEncoder) {
   const { TextEncoder, TextDecoder } = require('util');
-  globalThis.TextEncoder = TextEncoder;
-  globalThis.TextDecoder = TextDecoder;
+  Object.defineProperty(globalThis, 'TextEncoder', {
+    value: TextEncoder,
+    writable: false,
+    configurable: true
+  });
+  Object.defineProperty(globalThis, 'TextDecoder', {
+    value: TextDecoder,
+    writable: false,
+    configurable: true
+  });
+}
+
+// Mock navigator with credentials API
+if (!globalThis.navigator) {
+  Object.defineProperty(globalThis, 'navigator', {
+    value: {},
+    writable: true,
+    configurable: true
+  });
+}
+
+Object.defineProperty(globalThis.navigator, 'credentials', {
+  value: {
+    create: vi.fn(),
+    get: vi.fn()
+  },
+  writable: true,
+  configurable: true
+});
+
+// Mock location for passkey RP ID
+if (!globalThis.location) {
+  Object.defineProperty(globalThis, 'location', {
+    value: { 
+      hostname: 'localhost',
+      href: 'http://localhost:3000'
+    },
+    writable: true,
+    configurable: true
+  });
+}
+
+// Mock document for DOM interactions
+if (!globalThis.document) {
+  Object.defineProperty(globalThis, 'document', {
+    value: {
+      getElementById: vi.fn((id) => ({
+        onclick: null,
+        textContent: '',
+        value: ''
+      })),
+      addEventListener: vi.fn()
+    },
+    writable: true,
+    configurable: true
+  });
 }
