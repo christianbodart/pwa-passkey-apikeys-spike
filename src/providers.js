@@ -1,5 +1,5 @@
 // src/providers.js - Provider service for API interactions
-import providersConfig from '../providers.json' assert { type: 'json' };
+import providersConfig from '../providers.json' with { type: 'json' };
 
 export const PROVIDERS = providersConfig;
 
