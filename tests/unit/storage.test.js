@@ -1,16 +1,6 @@
 // tests/unit/storage.test.js
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import 'fake-indexeddb/auto';
-
-// Mock DOM environment
-global.document = {
-  getElementById: vi.fn((id) => ({
-    onclick: null,
-    textContent: '',
-    value: ''
-  })),
-  addEventListener: vi.fn()
-};
 
 describe('IndexedDB Storage', () => {
   let db;
@@ -198,30 +188,31 @@ describe('IndexedDB Storage', () => {
   });
 
   describe('Transaction Error Handling', () => {
-    it('handles transaction abort', async () => {
-      const error = await new Promise((resolve) => {
+    it('throws error for invalid data (missing keyPath)', () => {
+      // fake-indexeddb throws synchronously for missing keyPath
+      expect(() => {
         const tx = db.transaction(STORE_NAME, 'readwrite');
         const store = tx.objectStore(STORE_NAME);
-        
-        // Trigger error by putting invalid data
-        const req = store.put({ invalid: 'no provider key' });
-        req.onerror = () => resolve(req.error);
-      });
-
-      expect(error).toBeDefined();
+        store.put({ invalid: 'no provider key' });
+      }).toThrow();
     });
 
-    it('rejects on database error', async () => {
-      await expect(async () => {
-        return new Promise((resolve, reject) => {
-          const tx = db.transaction(STORE_NAME, 'readwrite');
-          const store = tx.objectStore(STORE_NAME);
-          // Missing required keyPath field
-          const req = store.put({ wrong: 'data' });
-          req.onerror = () => reject(req.error);
-          req.onsuccess = () => resolve();
-        });
-      }).rejects.toBeDefined();
+    it('handles valid transaction errors', async () => {
+      // Test a scenario that triggers an async error
+      // For example, trying to read from a closed transaction
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      
+      // Close the transaction by completing it
+      await new Promise((resolve) => {
+        tx.oncomplete = resolve;
+      });
+
+      // Now trying to use the store should fail
+      // Note: fake-indexeddb might handle this differently than real browsers
+      expect(() => {
+        store.get('test');
+      }).toThrow();
     });
   });
 
