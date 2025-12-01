@@ -1,5 +1,6 @@
 // app-ui.js - UI layer connecting DOM to refactored modules
 import { PasskeyKeyManager } from './src/app.js';
+import { PROVIDERS } from './src/providers.js';
 
 class UIController {
   constructor() {
@@ -11,10 +12,24 @@ class UIController {
   async init() {
     try {
       await this.manager.init();
+      this.populateProviders();
       this.bindUI();
     } catch (err) {
       console.error('Initialization failed:', err);
     }
+  }
+
+  populateProviders() {
+    const select = document.getElementById('provider');
+    if (!select) return;
+
+    // Add each provider from providers.json
+    Object.entries(PROVIDERS).forEach(([id, config]) => {
+      const option = document.createElement('option');
+      option.value = id;
+      option.textContent = config.name;
+      select.appendChild(option);
+    });
   }
 
   bindUI() {
@@ -23,9 +38,20 @@ class UIController {
     document.getElementById('test').onclick = () => this.handleTestCall();
   }
 
+  getSelectedProvider() {
+    const provider = document.getElementById('provider')?.value;
+    if (!provider) {
+      this.updateStatus('❌ Please select a provider first');
+      return null;
+    }
+    return provider;
+  }
+
   async handleCreatePasskey() {
     try {
-      const provider = document.getElementById('provider')?.value || 'openai';
+      const provider = this.getSelectedProvider();
+      if (!provider) return;
+
       await this.manager.createPasskey(provider);
     } catch (err) {
       console.error('Create passkey failed:', err);
@@ -34,7 +60,9 @@ class UIController {
 
   async handleStoreKey() {
     try {
-      const provider = document.getElementById('provider')?.value || 'openai';
+      const provider = this.getSelectedProvider();
+      if (!provider) return;
+
       const apiKey = document.getElementById('apikey')?.value;
 
       if (!apiKey) {
@@ -54,7 +82,9 @@ class UIController {
 
   async handleTestCall() {
     try {
-      const provider = document.getElementById('provider')?.value || 'openai';
+      const provider = this.getSelectedProvider();
+      if (!provider) return;
+
       const result = await this.manager.testCall(provider);
 
       // Display results

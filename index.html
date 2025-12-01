@@ -11,8 +11,14 @@
 <body>
   <h1>🗝️ Zero-Knowledge API Keys</h1>
   <div id="status">Ready</div>
+  
+  <label for="provider" style="display:block;margin-top:1rem;font-weight:bold;">Select Provider:</label>
+  <select id="provider" style="margin:0.5rem 0;width:100%;padding:.5rem;">
+    <option value="">-- Please select a provider --</option>
+  </select>
+  
   <button id="register">1. Create Passkey</button>
-  <input id="provider" placeholder="openai" style="margin:1rem 0;width:100%;padding:.5rem;">
+  
   <input id="apikey" type="password" placeholder="sk-..." style="margin:1rem 0;width:100%;padding:.5rem;">
   <button id="store">2. Store API Key</button>
   <button id="test">3. Test Call</button>
