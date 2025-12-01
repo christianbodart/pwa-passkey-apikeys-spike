@@ -4,6 +4,7 @@ import { KeyManager } from './key-manager.js';
 import { ProviderService } from './providers.js';
 import { PasskeyService } from './passkey-service.js';
 import { SessionManager } from './session-manager.js';
+import { CapabilityDetector } from './capability-detector.js';
 import { ValidationError } from './errors.js';
 import { SESSION_CONFIG } from './config.js';
 
@@ -16,9 +17,19 @@ export class PasskeyKeyManager {
    * @param {ProviderService} options.providerService - Provider service instance
    * @param {PasskeyService} options.passkeyService - Passkey service instance
    * @param {SessionManager} options.sessionManager - Session manager instance
+   * @param {CapabilityDetector} options.capabilityDetector - Capability detector instance
    * @param {Function} options.onStatusUpdate - Status update callback
    */
   constructor(options = {}) {
+    // Detect capabilities first
+    this.capabilityDetector = options.capabilityDetector || new CapabilityDetector();
+    this.capabilities = this.capabilityDetector.detect();
+    this.tier = this.capabilityDetector.getTier(this.capabilities);
+    this.tierConfig = this.capabilityDetector.getRecommendedConfig(this.tier);
+    
+    // Block if tier is 'blocked'
+    this.isBlocked = this.tier === 'blocked';
+    
     this.storage = options.storage || new StorageService();
     this.keyManager = options.keyManager || new KeyManager();
     this.providerService = options.providerService || new ProviderService();
@@ -65,16 +76,56 @@ export class PasskeyKeyManager {
   }
 
   /**
+   * Get capability information
+   * @returns {Object} Capability details
+   */
+  getCapabilities() {
+    return {
+      capabilities: this.capabilities,
+      tier: this.tier,
+      status: this.capabilityDetector.getStatus(this.tier, this.capabilities),
+      config: this.tierConfig,
+      isBlocked: this.isBlocked
+    };
+  }
+
+  /**
+   * Check if operation is allowed
+   * @throws {Error} If tier is blocked
+   */
+  checkAllowed() {
+    if (this.isBlocked) {
+      const status = this.capabilityDetector.getStatus(this.tier, this.capabilities);
+      throw new Error(
+        `BYOK unavailable: ${status.warnings.join(', ')}`
+      );
+    }
+  }
+
+  /**
    * Initialize the application
    * @returns {Promise<void>}
    */
   async init() {
     try {
+      // Emit capability detection event (for analytics)
+      const analytics = this.capabilityDetector.getAnalytics(this.capabilities, this.tier);
+      this.emit('capabilityDetected', analytics);
+
+      if (this.isBlocked) {
+        const status = this.capabilityDetector.getStatus(this.tier, this.capabilities);
+        this.updateStatus(`❌ BYOK disabled: ${status.warnings[0]}`);
+        this.emit('initialized', { success: false, blocked: true, tier: this.tier });
+        return;
+      }
+
       await this.storage.init();
-      this.updateStatus('✅ Ready! Select a provider and create a passkey.');
-      this.emit('initialized', { success: true });
+      
+      const status = this.capabilityDetector.getStatus(this.tier, this.capabilities);
+      this.updateStatus(`${status.emoji} Ready! Select a provider and create a passkey.`);
+      this.emit('initialized', { success: true, tier: this.tier, capabilities: this.capabilities });
     } catch (err) {
-      this.updateStatus(`❌ DB init failed: ${err.message}`);
+      this.updateStatus(`❌ Initialization failed: ${err.message}`);
       this.emit('initialized', { success: false, error: err });
       throw err;
     }
@@ -99,6 +150,7 @@ export class PasskeyKeyManager {
    * @returns {Promise<void>}
    */
   async createPasskey(provider) {
+    this.checkAllowed();
     this.validateProvider(provider);
 
     try {
@@ -125,6 +177,7 @@ export class PasskeyKeyManager {
    * @returns {Promise<PublicKeyCredential>}
    */
   async authenticatePasskey(provider) {
+    this.checkAllowed();
     this.validateProvider(provider);
 
     const record = await this.storage.get(provider);
@@ -146,6 +199,7 @@ export class PasskeyKeyManager {
    * @returns {Promise<void>}
    */
   async storeKey(provider, apiKey) {
+    this.checkAllowed();
     this.validateProvider(provider);
 
     if (!apiKey || typeof apiKey !== 'string') {
@@ -174,8 +228,8 @@ export class PasskeyKeyManager {
         updated: Date.now()
       });
 
-      // Start session with decrypted key
-      this.sessionManager.startSession(provider, apiKey);
+      // Start session with decrypted key (use tier-specific duration)
+      this.sessionManager.startSession(provider, apiKey, this.tierConfig.sessionDuration);
 
       this.updateStatus('✅ API key stored! (FaceID/PIN protected)');
       this.emit('keyStored', { provider });
@@ -192,6 +246,7 @@ export class PasskeyKeyManager {
    * @returns {Promise<string>}
    */
   async retrieveKey(provider) {
+    this.checkAllowed();
     this.validateProvider(provider);
 
     // Check for active session first
@@ -221,8 +276,8 @@ export class PasskeyKeyManager {
         decKey
       );
 
-      // Start session with decrypted key
-      this.sessionManager.startSession(provider, apiKey);
+      // Start session with decrypted key (use tier-specific duration)
+      this.sessionManager.startSession(provider, apiKey, this.tierConfig.sessionDuration);
 
       this.emit('keyRetrieved', { provider, fromCache: false });
       return apiKey;
@@ -239,6 +294,7 @@ export class PasskeyKeyManager {
    * @returns {Promise<{success: boolean, data?: any, error?: string}>}
    */
   async testCall(provider) {
+    this.checkAllowed();
     this.validateProvider(provider);
 
     try {

@@ -18,10 +18,17 @@ class UIController {
   }
 
   setupEventListeners() {
-    this.manager.on('initialized', ({ success, error }) => {
-      if (!success) {
-        console.error('Initialization failed:', error);
+    this.manager.on('initialized', ({ success, error, blocked, tier, capabilities }) => {
+      if (blocked) {
+        this.disableControls();
       }
+      this.updateSecurityBanner();
+    });
+
+    this.manager.on('capabilityDetected', (analytics) => {
+      console.log('Capability Analytics:', analytics);
+      // Send to analytics service (no PII)
+      this.logCapabilities(analytics);
     });
 
     this.manager.on('passkeyCreated', ({ provider }) => {
@@ -57,13 +64,60 @@ class UIController {
   async init() {
     try {
       await this.manager.init();
-      await this.populateProviders();
-      this.bindUI();
-      await this.updateUIState();
+      this.updateSecurityBanner();
+      
+      if (!this.manager.isBlocked) {
+        await this.populateProviders();
+        this.bindUI();
+        await this.updateUIState();
+      }
     } catch (err) {
       console.error('Initialization failed:', err);
       this.updateStatus(`❌ Fatal error: ${err.message}`);
     }
+  }
+
+  updateSecurityBanner() {
+    const capInfo = this.manager.getCapabilities();
+    const banner = document.getElementById('security-banner');
+    const title = document.getElementById('security-title');
+    const description = document.getElementById('security-description');
+    const warnings = document.getElementById('security-warnings');
+    
+    banner.className = `tier-${capInfo.tier}`;
+    title.innerHTML = `<span class="emoji">${capInfo.status.emoji}</span>${capInfo.status.title}`;
+    description.textContent = capInfo.status.description;
+    
+    if (capInfo.status.warnings.length > 0) {
+      warnings.innerHTML = capInfo.status.warnings
+        .map(w => `<div class="warning-item">⚠️ ${w}</div>`)
+        .join('');
+    } else {
+      warnings.innerHTML = '';
+    }
+  }
+
+  disableControls() {
+    const controls = document.getElementById('controls');
+    if (controls) {
+      controls.classList.add('controls-disabled');
+    }
+  }
+
+  logCapabilities(analytics) {
+    // In production, send to analytics service
+    // For now, just log to console
+    console.log('📊 Capability Analytics (no PII):', {
+      tier: analytics.tier,
+      features: {
+        webauthn: analytics.webauthn,
+        crypto: analytics.subtleCrypto,
+        visibility: analytics.visibilityApi,
+        indexedDB: analytics.indexedDB
+      },
+      browser: analytics.userAgent.split(' ')[0], // Just first part
+      timestamp: new Date(analytics.timestamp).toISOString()
+    });
   }
 
   async populateProviders() {

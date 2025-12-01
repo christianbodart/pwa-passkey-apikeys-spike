@@ -8,17 +8,42 @@
   <meta name="theme-color" content="#000000">
   <style>
     body{font-family:system-ui;padding:2rem;max-width:600px;margin:0 auto;}
+    
+    /* Security Banner */
+    #security-banner{margin:1rem 0;padding:1rem;border-radius:8px;border-left:4px solid;font-weight:500;}
+    #security-banner.tier-green{background:#e8f5e9;border-color:#4caf50;color:#2e7d32;}
+    #security-banner.tier-yellow{background:#fff3e0;border-color:#ff9800;color:#e65100;}
+    #security-banner.tier-blocked{background:#ffebee;border-color:#f44336;color:#c62828;}
+    #security-banner .emoji{font-size:1.2em;margin-right:0.5rem;}
+    #security-banner .warnings{margin-top:0.5rem;font-size:0.9em;opacity:0.9;}
+    #security-banner .warning-item{margin-left:1.5rem;}
+    
+    /* Session Status */
     #session-status{margin:1rem 0;padding:1rem;border-radius:8px;background:#f0f0f0;display:none;}
     #session-status.active{display:block;}
     #session-countdown{font-weight:bold;}
     #session-countdown.warning{color:#ff9800;}
     #session-countdown.danger{color:#f44336;}
     #lock-btn{margin-left:1rem;}
+    
+    /* Disabled state */
+    .controls-disabled{opacity:0.5;pointer-events:none;}
   </style>
 </head>
 <body>
   <h1>🗝️ Zero-Knowledge API Keys</h1>
-  <div id="status">Ready</div>
+  
+  <!-- Security Status Banner -->
+  <div id="security-banner" class="tier-green">
+    <div>
+      <span class="emoji">🔒</span>
+      <span id="security-title">Checking security features...</span>
+    </div>
+    <div id="security-description" style="font-size:0.9em;margin-top:0.3rem;opacity:0.8;"></div>
+    <div id="security-warnings" class="warnings"></div>
+  </div>
+  
+  <div id="status">Initializing...</div>
   
   <div id="session-status">
     <span id="session-info">🔓 Unlocked: <span id="session-provider"></span></span>
@@ -26,16 +51,19 @@
     <button id="lock-btn">🔒 Lock Session</button>
   </div>
   
-  <label for="provider" style="display:block;margin-top:1rem;font-weight:bold;">Select Provider:</label>
-  <select id="provider" style="margin:0.5rem 0;width:100%;padding:.5rem;">
-    <option value="">-- Please select a provider --</option>
-  </select>
+  <div id="controls">
+    <label for="provider" style="display:block;margin-top:1rem;font-weight:bold;">Select Provider:</label>
+    <select id="provider" style="margin:0.5rem 0;width:100%;padding:.5rem;">
+      <option value="">-- Please select a provider --</option>
+    </select>
+    
+    <button id="register">1. Create Passkey</button>
+    
+    <input id="apikey" type="password" placeholder="sk-..." style="margin:1rem 0;width:100%;padding:.5rem;">
+    <button id="store">2. Store API Key</button>
+    <button id="test">3. Test Call</button>
+  </div>
   
-  <button id="register">1. Create Passkey</button>
-  
-  <input id="apikey" type="password" placeholder="sk-..." style="margin:1rem 0;width:100%;padding:.5rem;">
-  <button id="store">2. Store API Key</button>
-  <button id="test">3. Test Call</button>
   <pre id="result"></pre>
   <script type="module" src="app-ui.js"></script>
   <script>
