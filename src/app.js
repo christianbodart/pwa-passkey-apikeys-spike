@@ -41,7 +41,10 @@ export class PasskeyKeyManager {
             name: 'user1',
             displayName: 'User'
           },
-          pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
+          pubKeyCredParams: [
+            { type: 'public-key', alg: -7 },  // ES256 (ECDSA with SHA-256)
+            { type: 'public-key', alg: -257 } // RS256 (RSA with SHA-256)
+          ],
           authenticatorSelection: {
             userVerification: 'required',
             residentKey: 'required'
