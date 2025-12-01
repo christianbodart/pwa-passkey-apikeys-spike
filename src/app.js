@@ -3,7 +3,9 @@ import { StorageService } from './storage.js';
 import { KeyManager } from './key-manager.js';
 import { ProviderService } from './providers.js';
 import { PasskeyService } from './passkey-service.js';
+import { SessionManager } from './session-manager.js';
 import { ValidationError } from './errors.js';
+import { SESSION_CONFIG } from './config.js';
 
 export class PasskeyKeyManager {
   /**
@@ -13,6 +15,7 @@ export class PasskeyKeyManager {
    * @param {KeyManager} options.keyManager - Key manager instance
    * @param {ProviderService} options.providerService - Provider service instance
    * @param {PasskeyService} options.passkeyService - Passkey service instance
+   * @param {SessionManager} options.sessionManager - Session manager instance
    * @param {Function} options.onStatusUpdate - Status update callback
    */
   constructor(options = {}) {
@@ -20,10 +23,22 @@ export class PasskeyKeyManager {
     this.keyManager = options.keyManager || new KeyManager();
     this.providerService = options.providerService || new ProviderService();
     this.passkeyService = options.passkeyService || new PasskeyService();
+    this.sessionManager = options.sessionManager || new SessionManager();
     this.onStatusUpdate = options.onStatusUpdate || ((msg) => console.log(msg));
     
     // Event listeners
     this.listeners = new Map();
+    
+    // Forward session events
+    this.sessionManager.on('expired', ({ provider }) => {
+      this.emit('sessionExpired', { provider });
+    });
+    this.sessionManager.on('started', ({ provider }) => {
+      this.emit('sessionStarted', { provider });
+    });
+    this.sessionManager.on('extended', ({ provider }) => {
+      this.emit('sessionExtended', { provider });
+    });
   }
 
   /**
@@ -159,6 +174,9 @@ export class PasskeyKeyManager {
         updated: Date.now()
       });
 
+      // Start session with decrypted key
+      this.sessionManager.startSession(provider, apiKey);
+
       this.updateStatus('✅ API key stored! (FaceID/PIN protected)');
       this.emit('keyStored', { provider });
     } catch (err) {
@@ -169,15 +187,24 @@ export class PasskeyKeyManager {
   }
 
   /**
-   * Retrieve and decrypt an API key
+   * Retrieve and decrypt an API key (with session caching)
    * @param {string} provider - Provider name (required)
    * @returns {Promise<string>}
    */
   async retrieveKey(provider) {
     this.validateProvider(provider);
 
+    // Check for active session first
+    const cachedKey = this.sessionManager.getApiKey(provider);
+    if (cachedKey) {
+      // Extend session on use
+      this.sessionManager.extendSession(provider);
+      this.emit('keyRetrieved', { provider, fromCache: true });
+      return cachedKey;
+    }
+
     try {
-      // Authenticate with passkey first
+      // No session - authenticate with passkey
       await this.authenticatePasskey(provider);
 
       // Get stored encrypted data
@@ -194,7 +221,10 @@ export class PasskeyKeyManager {
         decKey
       );
 
-      this.emit('keyRetrieved', { provider });
+      // Start session with decrypted key
+      this.sessionManager.startSession(provider, apiKey);
+
+      this.emit('keyRetrieved', { provider, fromCache: false });
       return apiKey;
     } catch (err) {
       this.updateStatus(`❌ Retrieval failed: ${err.message}`);
@@ -214,7 +244,7 @@ export class PasskeyKeyManager {
     try {
       this.updateStatus('📡 Calling API...');
 
-      // Retrieve decrypted API key
+      // Retrieve decrypted API key (may use session cache)
       const apiKey = await this.retrieveKey(provider);
 
       // Make test API call
@@ -246,14 +276,42 @@ export class PasskeyKeyManager {
     this.validateProvider(provider);
 
     const record = await this.storage.get(provider);
+    const hasSession = this.sessionManager.hasSession(provider);
     
     return {
       hasCredentialId: !!(record && record.credentialId),
       hasEncryptedKey: !!(record && record.encrypted),
       isComplete: !!(record && record.credentialId && record.encrypted),
+      hasActiveSession: hasSession,
       created: record?.created,
       updated: record?.updated
     };
+  }
+
+  /**
+   * Get session info for a provider
+   * @param {string} provider - Provider name
+   * @returns {Object|null}
+   */
+  getSessionInfo(provider) {
+    return this.sessionManager.getSessionInfo(provider);
+  }
+
+  /**
+   * Lock (end) session for a provider
+   * @param {string} provider - Provider name
+   */
+  lockSession(provider) {
+    this.sessionManager.endSession(provider);
+    this.updateStatus(`🔒 Session locked for ${provider}`);
+  }
+
+  /**
+   * Lock all sessions
+   */
+  lockAllSessions() {
+    this.sessionManager.endAllSessions();
+    this.updateStatus('🔒 All sessions locked');
   }
 
   /**
@@ -264,6 +322,9 @@ export class PasskeyKeyManager {
   async deleteProvider(provider) {
     this.validateProvider(provider);
 
+    // End session if active
+    this.sessionManager.endSession(provider);
+    
     await this.storage.delete(provider);
     this.updateStatus(`✅ ${provider} data deleted`);
     this.emit('providerDeleted', { provider });
@@ -279,6 +340,7 @@ export class PasskeyKeyManager {
       provider: record.provider,
       hasPasskey: !!record.credentialId,
       hasApiKey: !!record.encrypted,
+      hasActiveSession: this.sessionManager.hasSession(record.provider),
       created: record.created,
       updated: record.updated
     }));
@@ -297,6 +359,7 @@ export class PasskeyKeyManager {
    * Clean up resources
    */
   destroy() {
+    this.sessionManager.endAllSessions();
     this.storage.close();
     this.listeners.clear();
     this.emit('destroyed', {});
