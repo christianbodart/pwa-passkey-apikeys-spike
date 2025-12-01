@@ -17,7 +17,7 @@ export class PasskeyKeyManager {
   async init() {
     try {
       await this.storage.init();
-      this.updateStatus('✅ Ready! Create passkey first.');
+      this.updateStatus('✅ Ready! Select a provider and create a passkey.');
     } catch (err) {
       this.updateStatus(`❌ DB init failed: ${err.message}`);
       throw err;
@@ -26,10 +26,14 @@ export class PasskeyKeyManager {
 
   /**
    * Create a new WebAuthn passkey
-   * @param {string} provider - Provider name
+   * @param {string} provider - Provider name (required)
    * @returns {Promise<void>}
    */
-  async createPasskey(provider = 'openai') {
+  async createPasskey(provider) {
+    if (!provider) {
+      throw new Error('Provider is required');
+    }
+
     try {
       const challenge = this.keyManager.generateChallenge();
       const credential = await navigator.credentials.create({
@@ -66,10 +70,14 @@ export class PasskeyKeyManager {
 
   /**
    * Authenticate using WebAuthn passkey
-   * @param {string} provider - Provider name
+   * @param {string} provider - Provider name (required)
    * @returns {Promise<PublicKeyCredential>}
    */
-  async authenticatePasskey(provider = 'openai') {
+  async authenticatePasskey(provider) {
+    if (!provider) {
+      throw new Error('Provider is required');
+    }
+
     const record = await this.storage.get(provider);
     if (!record?.credentialId) {
       throw new Error('No passkey - create first');
@@ -89,11 +97,15 @@ export class PasskeyKeyManager {
 
   /**
    * Store an encrypted API key
-   * @param {string} provider - Provider name
+   * @param {string} provider - Provider name (required)
    * @param {string} apiKey - Plaintext API key
    * @returns {Promise<void>}
    */
   async storeKey(provider, apiKey) {
+    if (!provider) {
+      throw new Error('Provider is required');
+    }
+
     if (!apiKey) {
       throw new Error('API key is required');
     }
@@ -128,10 +140,14 @@ export class PasskeyKeyManager {
 
   /**
    * Retrieve and decrypt an API key
-   * @param {string} provider - Provider name
+   * @param {string} provider - Provider name (required)
    * @returns {Promise<string>}
    */
   async retrieveKey(provider) {
+    if (!provider) {
+      throw new Error('Provider is required');
+    }
+
     try {
       // Authenticate with passkey first
       await this.authenticatePasskey(provider);
@@ -159,10 +175,14 @@ export class PasskeyKeyManager {
 
   /**
    * Test API call with stored key
-   * @param {string} provider - Provider name
+   * @param {string} provider - Provider name (required)
    * @returns {Promise<{success: boolean, data?: any, error?: string}>}
    */
-  async testCall(provider = 'openai') {
+  async testCall(provider) {
+    if (!provider) {
+      throw new Error('Provider is required');
+    }
+
     try {
       this.updateStatus('📡 Calling API...');
 
@@ -188,10 +208,14 @@ export class PasskeyKeyManager {
 
   /**
    * Check passkey status for a provider
-   * @param {string} provider - Provider name
+   * @param {string} provider - Provider name (required)
    * @returns {Promise<{hasCredentialId: boolean, hasEncryptedKey: boolean, isComplete: boolean}>}
    */
-  async getPasskeyStatus(provider = 'openai') {
+  async getPasskeyStatus(provider) {
+    if (!provider) {
+      throw new Error('Provider is required');
+    }
+
     const record = await this.storage.get(provider);
     
     return {
