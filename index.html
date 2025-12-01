@@ -6,11 +6,25 @@
   <title>PWA Passkey API Keys</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#000000">
-  <style>body{font-family:system-ui;padding:2rem;max-width:600px;margin:0 auto;}</style>
+  <style>
+    body{font-family:system-ui;padding:2rem;max-width:600px;margin:0 auto;}
+    #session-status{margin:1rem 0;padding:1rem;border-radius:8px;background:#f0f0f0;display:none;}
+    #session-status.active{display:block;}
+    #session-countdown{font-weight:bold;}
+    #session-countdown.warning{color:#ff9800;}
+    #session-countdown.danger{color:#f44336;}
+    #lock-btn{margin-left:1rem;}
+  </style>
 </head>
 <body>
   <h1>🗝️ Zero-Knowledge API Keys</h1>
   <div id="status">Ready</div>
+  
+  <div id="session-status">
+    <span id="session-info">🔓 Unlocked: <span id="session-provider"></span></span>
+    <span id="session-countdown"></span>
+    <button id="lock-btn">🔒 Lock Session</button>
+  </div>
   
   <label for="provider" style="display:block;margin-top:1rem;font-weight:bold;">Select Provider:</label>
   <select id="provider" style="margin:0.5rem 0;width:100%;padding:.5rem;">

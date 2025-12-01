@@ -1,6 +1,7 @@
 // app-ui.js - UI layer connecting DOM to refactored modules
 import { PasskeyKeyManager } from './src/app.js';
 import { PROVIDERS } from './src/providers.js';
+import { SESSION_CONFIG } from './src/config.js';
 
 class UIController {
   constructor() {
@@ -8,6 +9,9 @@ class UIController {
     this.manager = new PasskeyKeyManager({
       onStatusUpdate: (msg) => this.updateStatus(msg)
     });
+    
+    // Session UI update interval
+    this.sessionUpdateInterval = null;
     
     // Listen to events
     this.setupEventListeners();
@@ -26,6 +30,23 @@ class UIController {
 
     this.manager.on('keyStored', ({ provider }) => {
       console.log(`API key stored for ${provider}`);
+      this.updateSessionUI();
+    });
+
+    this.manager.on('sessionStarted', ({ provider }) => {
+      console.log(`Session started for ${provider}`);
+      this.updateSessionUI();
+      this.startSessionTicker();
+    });
+
+    this.manager.on('sessionExpired', ({ provider }) => {
+      console.log(`Session expired for ${provider}`);
+      this.updateSessionUI();
+      this.updateStatus(`🔒 Session expired for ${provider}`);
+    });
+
+    this.manager.on('sessionExtended', ({ provider }) => {
+      console.log(`Session extended for ${provider}`);
     });
 
     this.manager.on('apiCallSuccess', ({ provider, result }) => {
@@ -96,6 +117,7 @@ class UIController {
     document.getElementById('register').onclick = () => this.handleCreatePasskey();
     document.getElementById('store').onclick = () => this.handleStoreKey();
     document.getElementById('test').onclick = () => this.handleTestCall();
+    document.getElementById('lock-btn').onclick = () => this.handleLockSession();
   }
 
   async updateUIState() {
@@ -110,6 +132,7 @@ class UIController {
       if (storeBtn) storeBtn.disabled = true;
       if (testBtn) testBtn.disabled = true;
       this.updateStatus('👉 Select a provider to begin');
+      this.hideSessionUI();
       return;
     }
 
@@ -130,8 +153,13 @@ class UIController {
         testBtn.disabled = !status.isComplete;
       }
 
+      // Update session UI
+      this.updateSessionUI();
+
       // Update status message
-      if (status.isComplete) {
+      if (status.hasActiveSession) {
+        this.updateStatus(`🔓 ${providerName} session active. No passkey required!`);
+      } else if (status.isComplete) {
         this.updateStatus(`✅ ${providerName} is fully configured. Ready to test!`);
       } else if (status.hasCredentialId) {
         this.updateStatus(`🔑 ${providerName} passkey exists. You can store/update your API key.`);
@@ -141,6 +169,80 @@ class UIController {
     } catch (err) {
       console.error('Failed to update UI state:', err);
       this.updateStatus(`❌ Error: ${err.message}`);
+    }
+  }
+
+  updateSessionUI() {
+    const provider = document.getElementById('provider')?.value;
+    if (!provider) {
+      this.hideSessionUI();
+      return;
+    }
+
+    const sessionInfo = this.manager.getSessionInfo(provider);
+    const sessionStatus = document.getElementById('session-status');
+    const sessionProvider = document.getElementById('session-provider');
+    
+    if (sessionInfo && sessionInfo.active) {
+      const providerName = PROVIDERS[provider]?.name || provider;
+      sessionProvider.textContent = providerName;
+      sessionStatus.classList.add('active');
+      this.updateSessionCountdown(sessionInfo.remaining);
+    } else {
+      this.hideSessionUI();
+    }
+  }
+
+  hideSessionUI() {
+    const sessionStatus = document.getElementById('session-status');
+    if (sessionStatus) {
+      sessionStatus.classList.remove('active');
+    }
+    this.stopSessionTicker();
+  }
+
+  updateSessionCountdown(remainingMs) {
+    const countdownEl = document.getElementById('session-countdown');
+    if (!countdownEl) return;
+
+    const minutes = Math.floor(remainingMs / 60000);
+    const seconds = Math.floor((remainingMs % 60000) / 1000);
+    const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    
+    countdownEl.textContent = `(expires in ${timeStr})`;
+
+    // Color coding
+    countdownEl.classList.remove('warning', 'danger');
+    if (remainingMs < 60000) { // < 1 minute
+      countdownEl.classList.add('danger');
+    } else if (remainingMs < SESSION_CONFIG.warningThreshold) {
+      countdownEl.classList.add('warning');
+    }
+  }
+
+  startSessionTicker() {
+    this.stopSessionTicker();
+    
+    this.sessionUpdateInterval = setInterval(() => {
+      const provider = document.getElementById('provider')?.value;
+      if (!provider) {
+        this.stopSessionTicker();
+        return;
+      }
+
+      const sessionInfo = this.manager.getSessionInfo(provider);
+      if (sessionInfo && sessionInfo.active) {
+        this.updateSessionCountdown(sessionInfo.remaining);
+      } else {
+        this.hideSessionUI();
+      }
+    }, SESSION_CONFIG.updateInterval);
+  }
+
+  stopSessionTicker() {
+    if (this.sessionUpdateInterval) {
+      clearInterval(this.sessionUpdateInterval);
+      this.sessionUpdateInterval = null;
     }
   }
 
@@ -210,6 +312,15 @@ class UIController {
       console.error('Test call failed:', err);
       // Error message already shown by manager
     }
+  }
+
+  handleLockSession() {
+    const provider = this.getSelectedProvider();
+    if (!provider) return;
+
+    this.manager.lockSession(provider);
+    this.updateSessionUI();
+    this.updateUIState();
   }
 
   updateStatus(msg) {
