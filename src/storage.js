@@ -1,6 +1,9 @@
 // src/storage.js - IndexedDB storage operations
+import { StorageError } from './errors.js';
+import { STORAGE_CONFIG } from './config.js';
+
 export class StorageService {
-  constructor(dbName = 'pwa-apikeys-v1', storeName = 'keys') {
+  constructor(dbName = STORAGE_CONFIG.dbName, storeName = STORAGE_CONFIG.storeName) {
     this.dbName = dbName;
     this.storeName = storeName;
     this.db = null;
@@ -14,7 +17,7 @@ export class StorageService {
     if (this.db) return this.db;
 
     return new Promise((resolve, reject) => {
-      const req = indexedDB.open(this.dbName, 1);
+      const req = indexedDB.open(this.dbName, STORAGE_CONFIG.version);
       
       req.onupgradeneeded = (e) => {
         const db = e.target.result;
@@ -29,7 +32,10 @@ export class StorageService {
       };
       
       req.onerror = (e) => {
-        reject(new Error(`Database initialization failed: ${e.target.error?.message}`));
+        reject(new StorageError(
+          `Database initialization failed: ${e.target.error?.message}`,
+          'INIT_FAILED'
+        ));
       };
     });
   }
@@ -41,7 +47,12 @@ export class StorageService {
    * @returns {Promise<void>}
    */
   async put(provider, data) {
-    if (!this.db) throw new Error('Database not initialized');
+    if (!this.db) {
+      throw new StorageError(
+        'Database not initialized. Call init() first.',
+        'NOT_INITIALIZED'
+      );
+    }
 
     return new Promise((resolve, reject) => {
       const tx = this.db.transaction(this.storeName, 'readwrite');
@@ -49,7 +60,10 @@ export class StorageService {
       const req = store.put({ provider, ...data });
       
       req.onsuccess = () => resolve();
-      req.onerror = () => reject(new Error(`Store failed: ${req.error?.message}`));
+      req.onerror = () => reject(new StorageError(
+        `Failed to store data: ${req.error?.message}`,
+        'PUT_FAILED'
+      ));
     });
   }
 
@@ -59,7 +73,12 @@ export class StorageService {
    * @returns {Promise<Object|undefined>}
    */
   async get(provider) {
-    if (!this.db) throw new Error('Database not initialized');
+    if (!this.db) {
+      throw new StorageError(
+        'Database not initialized. Call init() first.',
+        'NOT_INITIALIZED'
+      );
+    }
 
     return new Promise((resolve, reject) => {
       const tx = this.db.transaction(this.storeName, 'readonly');
@@ -67,7 +86,10 @@ export class StorageService {
       const req = store.get(provider);
       
       req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(new Error(`Retrieval failed: ${req.error?.message}`));
+      req.onerror = () => reject(new StorageError(
+        `Failed to retrieve data: ${req.error?.message}`,
+        'GET_FAILED'
+      ));
     });
   }
 
@@ -77,7 +99,12 @@ export class StorageService {
    * @returns {Promise<void>}
    */
   async delete(provider) {
-    if (!this.db) throw new Error('Database not initialized');
+    if (!this.db) {
+      throw new StorageError(
+        'Database not initialized. Call init() first.',
+        'NOT_INITIALIZED'
+      );
+    }
 
     return new Promise((resolve, reject) => {
       const tx = this.db.transaction(this.storeName, 'readwrite');
@@ -85,7 +112,10 @@ export class StorageService {
       const req = store.delete(provider);
       
       req.onsuccess = () => resolve();
-      req.onerror = () => reject(new Error(`Deletion failed: ${req.error?.message}`));
+      req.onerror = () => reject(new StorageError(
+        `Failed to delete data: ${req.error?.message}`,
+        'DELETE_FAILED'
+      ));
     });
   }
 
@@ -94,7 +124,12 @@ export class StorageService {
    * @returns {Promise<Array>}
    */
   async getAll() {
-    if (!this.db) throw new Error('Database not initialized');
+    if (!this.db) {
+      throw new StorageError(
+        'Database not initialized. Call init() first.',
+        'NOT_INITIALIZED'
+      );
+    }
 
     return new Promise((resolve, reject) => {
       const tx = this.db.transaction(this.storeName, 'readonly');
@@ -102,7 +137,10 @@ export class StorageService {
       const req = store.getAll();
       
       req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(new Error(`GetAll failed: ${req.error?.message}`));
+      req.onerror = () => reject(new StorageError(
+        `Failed to retrieve all data: ${req.error?.message}`,
+        'GETALL_FAILED'
+      ));
     });
   }
 

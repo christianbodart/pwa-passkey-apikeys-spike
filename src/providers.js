@@ -1,5 +1,6 @@
 // src/providers.js - Provider service for API interactions
 import providersConfig from '../providers.json' with { type: 'json' };
+import { ProviderError } from './errors.js';
 
 export const PROVIDERS = providersConfig;
 
@@ -12,7 +13,10 @@ export class ProviderService {
   getProvider(providerName) {
     const provider = PROVIDERS[providerName.toLowerCase()];
     if (!provider) {
-      throw new Error(`Unknown provider: ${providerName}`);
+      throw new ProviderError(
+        `Unknown provider: ${providerName}`,
+        'UNKNOWN_PROVIDER'
+      );
     }
     return provider;
   }
@@ -41,10 +45,17 @@ export class ProviderService {
       headers[provider.authHeader] = apiKey;
     }
 
-    return fetch(url, {
-      ...options,
-      headers
-    });
+    try {
+      return await fetch(url, {
+        ...options,
+        headers
+      });
+    } catch (error) {
+      throw new ProviderError(
+        `API call failed: ${error.message}`,
+        'API_CALL_FAILED'
+      );
+    }
   }
 
   /**
@@ -67,6 +78,12 @@ export class ProviderService {
       const data = await response.json();
       return { success: true, data };
     } catch (error) {
+      if (error instanceof ProviderError) {
+        return {
+          success: false,
+          error: error.message
+        };
+      }
       return {
         success: false,
         error: error.message
