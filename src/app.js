@@ -187,6 +187,21 @@ export class PasskeyKeyManager {
   }
 
   /**
+   * Check passkey status for a provider
+   * @param {string} provider - Provider name
+   * @returns {Promise<{hasCredentialId: boolean, hasEncryptedKey: boolean, isComplete: boolean}>}
+   */
+  async getPasskeyStatus(provider = 'openai') {
+    const record = await this.storage.get(provider);
+    
+    return {
+      hasCredentialId: !!(record && record.credentialId),
+      hasEncryptedKey: !!(record && record.encrypted),
+      isComplete: !!(record && record.credentialId && record.encrypted)
+    };
+  }
+
+  /**
    * Update status message (override this in UI layer)
    * @param {string} msg - Status message
    */
