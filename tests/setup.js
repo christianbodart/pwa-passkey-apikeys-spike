@@ -9,11 +9,15 @@ global.PublicKeyCredential = class PublicKeyCredential {
   }
 };
 
-// Mock navigator.credentials
-global.navigator.credentials = {
-  create: vi.fn(),
-  get: vi.fn()
-};
+// Mock navigator.credentials (use defineProperty to avoid 'only a getter' error)
+Object.defineProperty(global.navigator, 'credentials', {
+  value: {
+    create: vi.fn(),
+    get: vi.fn()
+  },
+  writable: true,
+  configurable: true
+});
 
 // Mock crypto API (happy-dom provides this, but ensure it's complete)
 if (!global.crypto.subtle) {
