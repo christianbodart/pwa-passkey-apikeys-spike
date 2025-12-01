@@ -2,12 +2,51 @@
 import { StorageService } from './storage.js';
 import { KeyManager } from './key-manager.js';
 import { ProviderService } from './providers.js';
+import { PasskeyService } from './passkey-service.js';
+import { ValidationError } from './errors.js';
 
 export class PasskeyKeyManager {
-  constructor() {
-    this.storage = new StorageService();
-    this.keyManager = new KeyManager();
-    this.providerService = new ProviderService();
+  /**
+   * Create a new PasskeyKeyManager
+   * @param {Object} options - Configuration options
+   * @param {StorageService} options.storage - Storage service instance
+   * @param {KeyManager} options.keyManager - Key manager instance
+   * @param {ProviderService} options.providerService - Provider service instance
+   * @param {PasskeyService} options.passkeyService - Passkey service instance
+   * @param {Function} options.onStatusUpdate - Status update callback
+   */
+  constructor(options = {}) {
+    this.storage = options.storage || new StorageService();
+    this.keyManager = options.keyManager || new KeyManager();
+    this.providerService = options.providerService || new ProviderService();
+    this.passkeyService = options.passkeyService || new PasskeyService();
+    this.onStatusUpdate = options.onStatusUpdate || ((msg) => console.log(msg));
+    
+    // Event listeners
+    this.listeners = new Map();
+  }
+
+  /**
+   * Register an event listener
+   * @param {string} event - Event name
+   * @param {Function} callback - Callback function
+   */
+  on(event, callback) {
+    if (!this.listeners.has(event)) {
+      this.listeners.set(event, []);
+    }
+    this.listeners.get(event).push(callback);
+  }
+
+  /**
+   * Emit an event
+   * @param {string} event - Event name
+   * @param {*} data - Event data
+   */
+  emit(event, data) {
+    if (this.listeners.has(event)) {
+      this.listeners.get(event).forEach(callback => callback(data));
+    }
   }
 
   /**
@@ -18,10 +57,25 @@ export class PasskeyKeyManager {
     try {
       await this.storage.init();
       this.updateStatus('✅ Ready! Select a provider and create a passkey.');
+      this.emit('initialized', { success: true });
     } catch (err) {
       this.updateStatus(`❌ DB init failed: ${err.message}`);
+      this.emit('initialized', { success: false, error: err });
       throw err;
     }
+  }
+
+  /**
+   * Validate provider parameter
+   * @param {string} provider
+   * @throws {ValidationError}
+   */
+  validateProvider(provider) {
+    if (!provider || typeof provider !== 'string') {
+      throw new ValidationError('Provider is required and must be a string');
+    }
+    // This will throw ProviderError if provider doesn't exist
+    this.providerService.getProvider(provider);
   }
 
   /**
@@ -30,31 +84,11 @@ export class PasskeyKeyManager {
    * @returns {Promise<void>}
    */
   async createPasskey(provider) {
-    if (!provider) {
-      throw new Error('Provider is required');
-    }
+    this.validateProvider(provider);
 
     try {
       const challenge = this.keyManager.generateChallenge();
-      const credential = await navigator.credentials.create({
-        publicKey: {
-          challenge,
-          rp: { name: 'PWA API Keys', id: location.hostname },
-          user: {
-            id: new TextEncoder().encode('user1'),
-            name: 'user1',
-            displayName: 'User'
-          },
-          pubKeyCredParams: [
-            { type: 'public-key', alg: -7 },  // ES256 (ECDSA with SHA-256)
-            { type: 'public-key', alg: -257 } // RS256 (RSA with SHA-256)
-          ],
-          authenticatorSelection: {
-            userVerification: 'required',
-            residentKey: 'required'
-          }
-        }
-      });
+      const credential = await this.passkeyService.createCredential(provider, challenge);
 
       await this.storage.put(provider, {
         credentialId: credential.rawId,
@@ -62,8 +96,10 @@ export class PasskeyKeyManager {
       });
 
       this.updateStatus('✅ System Passkey created! (FaceID/PIN ready)');
+      this.emit('passkeyCreated', { provider });
     } catch (err) {
-      this.updateStatus(`❌ Passkey failed: ${err.message} (Needs HTTPS/localhost)`);
+      this.updateStatus(`❌ Passkey failed: ${err.message}`);
+      this.emit('passkeyError', { provider, error: err });
       throw err;
     }
   }
@@ -74,24 +110,17 @@ export class PasskeyKeyManager {
    * @returns {Promise<PublicKeyCredential>}
    */
   async authenticatePasskey(provider) {
-    if (!provider) {
-      throw new Error('Provider is required');
-    }
+    this.validateProvider(provider);
 
     const record = await this.storage.get(provider);
     if (!record?.credentialId) {
-      throw new Error('No passkey - create first');
+      throw new ValidationError('No passkey found - create one first');
     }
 
     const challenge = this.keyManager.generateChallenge();
-    const assertion = await navigator.credentials.get({
-      publicKey: {
-        challenge,
-        allowCredentials: [{ type: 'public-key', id: record.credentialId }],
-        userVerification: 'required'
-      }
-    });
+    const assertion = await this.passkeyService.authenticate(record.credentialId, challenge);
 
+    this.emit('authenticated', { provider });
     return assertion;
   }
 
@@ -102,12 +131,10 @@ export class PasskeyKeyManager {
    * @returns {Promise<void>}
    */
   async storeKey(provider, apiKey) {
-    if (!provider) {
-      throw new Error('Provider is required');
-    }
+    this.validateProvider(provider);
 
-    if (!apiKey) {
-      throw new Error('API key is required');
+    if (!apiKey || typeof apiKey !== 'string') {
+      throw new ValidationError('API key is required and must be a string');
     }
 
     try {
@@ -128,12 +155,15 @@ export class PasskeyKeyManager {
         credentialId,
         encKeyMaterial: keyBuffer,
         iv,
-        encrypted
+        encrypted,
+        updated: Date.now()
       });
 
       this.updateStatus('✅ API key stored! (FaceID/PIN protected)');
+      this.emit('keyStored', { provider });
     } catch (err) {
       this.updateStatus(`❌ Store failed: ${err.message}`);
+      this.emit('keyStoreError', { provider, error: err });
       throw err;
     }
   }
@@ -144,9 +174,7 @@ export class PasskeyKeyManager {
    * @returns {Promise<string>}
    */
   async retrieveKey(provider) {
-    if (!provider) {
-      throw new Error('Provider is required');
-    }
+    this.validateProvider(provider);
 
     try {
       // Authenticate with passkey first
@@ -155,7 +183,7 @@ export class PasskeyKeyManager {
       // Get stored encrypted data
       const record = await this.storage.get(provider);
       if (!record || !record.encrypted) {
-        throw new Error('No stored key found');
+        throw new ValidationError('No stored key found');
       }
 
       // Import decryption key and decrypt
@@ -166,9 +194,11 @@ export class PasskeyKeyManager {
         decKey
       );
 
+      this.emit('keyRetrieved', { provider });
       return apiKey;
     } catch (err) {
       this.updateStatus(`❌ Retrieval failed: ${err.message}`);
+      this.emit('keyRetrievalError', { provider, error: err });
       throw err;
     }
   }
@@ -179,9 +209,7 @@ export class PasskeyKeyManager {
    * @returns {Promise<{success: boolean, data?: any, error?: string}>}
    */
   async testCall(provider) {
-    if (!provider) {
-      throw new Error('Provider is required');
-    }
+    this.validateProvider(provider);
 
     try {
       this.updateStatus('📡 Calling API...');
@@ -195,13 +223,16 @@ export class PasskeyKeyManager {
       if (result.success) {
         const count = result.data?.data?.length || result.data?.models?.length || 0;
         this.updateStatus(`✅ Success! ${count} models.`);
+        this.emit('apiCallSuccess', { provider, result });
       } else {
         this.updateStatus(`❌ API call failed: ${result.error}`);
+        this.emit('apiCallFailed', { provider, error: result.error });
       }
 
       return result;
     } catch (err) {
       this.updateStatus(`❌ Test failed: ${err.message}`);
+      this.emit('apiCallError', { provider, error: err });
       throw err;
     }
   }
@@ -212,24 +243,62 @@ export class PasskeyKeyManager {
    * @returns {Promise<{hasCredentialId: boolean, hasEncryptedKey: boolean, isComplete: boolean}>}
    */
   async getPasskeyStatus(provider) {
-    if (!provider) {
-      throw new Error('Provider is required');
-    }
+    this.validateProvider(provider);
 
     const record = await this.storage.get(provider);
     
     return {
       hasCredentialId: !!(record && record.credentialId),
       hasEncryptedKey: !!(record && record.encrypted),
-      isComplete: !!(record && record.credentialId && record.encrypted)
+      isComplete: !!(record && record.credentialId && record.encrypted),
+      created: record?.created,
+      updated: record?.updated
     };
   }
 
   /**
-   * Update status message (override this in UI layer)
+   * Delete provider data
+   * @param {string} provider - Provider name
+   * @returns {Promise<void>}
+   */
+  async deleteProvider(provider) {
+    this.validateProvider(provider);
+
+    await this.storage.delete(provider);
+    this.updateStatus(`✅ ${provider} data deleted`);
+    this.emit('providerDeleted', { provider });
+  }
+
+  /**
+   * Get all configured providers
+   * @returns {Promise<Array>}
+   */
+  async getAllProviders() {
+    const records = await this.storage.getAll();
+    return records.map(record => ({
+      provider: record.provider,
+      hasPasskey: !!record.credentialId,
+      hasApiKey: !!record.encrypted,
+      created: record.created,
+      updated: record.updated
+    }));
+  }
+
+  /**
+   * Update status message
    * @param {string} msg - Status message
    */
   updateStatus(msg) {
-    console.log(msg);
+    this.onStatusUpdate(msg);
+    this.emit('status', msg);
+  }
+
+  /**
+   * Clean up resources
+   */
+  destroy() {
+    this.storage.close();
+    this.listeners.clear();
+    this.emit('destroyed', {});
   }
 }
