@@ -2,6 +2,7 @@
 import 'fake-indexeddb/auto';
 import { webcrypto } from 'node:crypto';
 import { vi } from 'vitest';
+import { TextEncoder as NUTextEncoder, TextDecoder as NUTextDecoder } from 'node:util';
 
 // Mock Web Crypto API using Object.defineProperty
 if (!globalThis.crypto) {
@@ -14,14 +15,14 @@ if (!globalThis.crypto) {
 
 // Mock TextEncoder/TextDecoder (needed for crypto operations)
 if (!globalThis.TextEncoder) {
-  const { TextEncoder, TextDecoder } = require('util');
+  
   Object.defineProperty(globalThis, 'TextEncoder', {
-    value: TextEncoder,
+    value: NUTextEncoder,
     writable: false,
     configurable: true
   });
   Object.defineProperty(globalThis, 'TextDecoder', {
-    value: TextDecoder,
+    value: NUTextDecoder,
     writable: false,
     configurable: true
   });
