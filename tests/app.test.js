@@ -70,7 +70,10 @@ describe('PasskeyKeyManager (Current Implementation)', () => {
       expect(document.getElementById).toHaveBeenCalledWith('store');
       expect(document.getElementById).toHaveBeenCalledWith('test');
     });
-  });*/
+ */
+
+  });
+ 
 
   describe('Passkey Creation Flow', () => {
     it('generates 32-byte challenge for WebAuthn', () => {
