@@ -4,9 +4,33 @@ import { PROVIDERS } from './src/providers.js';
 
 class UIController {
   constructor() {
-    this.manager = new PasskeyKeyManager();
-    // Override updateStatus to update DOM
-    this.manager.updateStatus = (msg) => this.updateStatus(msg);
+    // Create manager with status update callback
+    this.manager = new PasskeyKeyManager({
+      onStatusUpdate: (msg) => this.updateStatus(msg)
+    });
+    
+    // Listen to events
+    this.setupEventListeners();
+  }
+
+  setupEventListeners() {
+    this.manager.on('initialized', ({ success, error }) => {
+      if (!success) {
+        console.error('Initialization failed:', error);
+      }
+    });
+
+    this.manager.on('passkeyCreated', ({ provider }) => {
+      console.log(`Passkey created for ${provider}`);
+    });
+
+    this.manager.on('keyStored', ({ provider }) => {
+      console.log(`API key stored for ${provider}`);
+    });
+
+    this.manager.on('apiCallSuccess', ({ provider, result }) => {
+      console.log(`API call successful for ${provider}:`, result);
+    });
   }
 
   async init() {
@@ -17,6 +41,7 @@ class UIController {
       await this.updateUIState();
     } catch (err) {
       console.error('Initialization failed:', err);
+      this.updateStatus(`❌ Fatal error: ${err.message}`);
     }
   }
 
@@ -56,7 +81,8 @@ class UIController {
           option.textContent = config.name;
         }
       } catch (err) {
-        console.error(`Failed to check status for ${providerId}:`, err);
+        // Provider might not exist in config, skip
+        console.warn(`Failed to check status for ${providerId}:`, err);
       }
     }
   }
@@ -114,6 +140,7 @@ class UIController {
       }
     } catch (err) {
       console.error('Failed to update UI state:', err);
+      this.updateStatus(`❌ Error: ${err.message}`);
     }
   }
 
@@ -136,6 +163,7 @@ class UIController {
       await this.updateUIState();
     } catch (err) {
       console.error('Create passkey failed:', err);
+      // Error message already shown by manager
     }
   }
 
@@ -161,6 +189,7 @@ class UIController {
       await this.updateUIState();
     } catch (err) {
       console.error('Store key failed:', err);
+      // Error message already shown by manager
     }
   }
 
@@ -179,6 +208,7 @@ class UIController {
       }
     } catch (err) {
       console.error('Test call failed:', err);
+      // Error message already shown by manager
     }
   }
 
