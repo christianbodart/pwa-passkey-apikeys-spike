@@ -1,37 +1,7 @@
-// src/providers.js - Provider configurations and API call utilities
+// src/providers.js - Provider service for API interactions
+import providersConfig from '../providers.json' assert { type: 'json' };
 
-/**
- * Supported API providers
- */
-export const PROVIDERS = {
-  openai: {
-    name: 'OpenAI',
-    baseUrl: 'https://api.openai.com/v1',
-    testEndpoint: '/models',
-    authHeader: 'Authorization',
-    authPrefix: 'Bearer',
-    corsSupported: true
-  },
-  anthropic: {
-    name: 'Anthropic',
-    baseUrl: 'https://api.anthropic.com/v1',
-    testEndpoint: '/messages',
-    authHeader: 'x-api-key',
-    authPrefix: '',
-    corsSupported: true,
-    additionalHeaders: {
-      'anthropic-version': '2023-06-01'
-    }
-  },
-  google: {
-    name: 'Google AI',
-    baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-    testEndpoint: '/models',
-    authHeader: 'x-goog-api-key',
-    authPrefix: '',
-    corsSupported: false // Partial CORS support
-  }
-};
+export const PROVIDERS = providersConfig;
 
 export class ProviderService {
   /**
