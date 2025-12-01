@@ -1,0 +1,29 @@
+{
+  "openai": {
+    "name": "OpenAI",
+    "baseUrl": "https://api.openai.com/v1",
+    "testEndpoint": "/models",
+    "authHeader": "Authorization",
+    "authPrefix": "Bearer",
+    "corsSupported": true
+  },
+  "anthropic": {
+    "name": "Anthropic",
+    "baseUrl": "https://api.anthropic.com/v1",
+    "testEndpoint": "/messages",
+    "authHeader": "x-api-key",
+    "authPrefix": "",
+    "corsSupported": true,
+    "additionalHeaders": {
+      "anthropic-version": "2023-06-01"
+    }
+  },
+  "google": {
+    "name": "Google AI",
+    "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
+    "testEndpoint": "/models",
+    "authHeader": "x-goog-api-key",
+    "authPrefix": "",
+    "corsSupported": false
+  }
+}
