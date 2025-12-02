@@ -1,7 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { KeyManager } from '../../src/key-manager.js';
+import { describe, it, expect } from 'vitest';
 import {
   generateTestKey,
+  generateIV,
+  encrypt,
+  decrypt,
   encryptWithNewKey,
   decryptData,
   testRoundtrip,
@@ -11,7 +13,7 @@ import {
   getTestData
 } from '../helpers/crypto-helpers.js';
 
-describe('KeyManager', () => {
+describe('Web Crypto API - AES-GCM Encryption', () => {
   describe('Key Generation', () => {
     it('should generate an extractable AES-GCM key', async () => {
       const key = await generateTestKey(true);
@@ -31,15 +33,15 @@ describe('KeyManager', () => {
 
   describe('IV Generation', () => {
     it('should generate a 12-byte IV', () => {
-      const iv = KeyManager.generateIV();
+      const iv = generateIV();
       
       expect(iv).toBeInstanceOf(Uint8Array);
       expect(iv.length).toBe(12);
     });
 
     it('should generate unique IVs', () => {
-      const iv1 = KeyManager.generateIV();
-      const iv2 = KeyManager.generateIV();
+      const iv1 = generateIV();
+      const iv2 = generateIV();
       
       expect(iv1).not.toEqual(iv2);
     });
@@ -95,7 +97,7 @@ describe('KeyManager', () => {
 
     it('should fail decryption with wrong IV', async () => {
       const { encrypted, key } = await encryptWithNewKey(testData.simple);
-      const wrongIV = KeyManager.generateIV();
+      const wrongIV = generateIV();
       
       await expect(decryptData(encrypted, wrongIV, key)).rejects.toThrow();
     });
@@ -126,10 +128,10 @@ describe('KeyManager', () => {
       const importedKey = await testKeyPortability(originalKey);
       
       const plaintext = testData.simple;
-      const iv = KeyManager.generateIV();
+      const iv = generateIV();
       
-      const encrypted = await KeyManager.encrypt(plaintext, originalKey, iv);
-      const decrypted = await KeyManager.decrypt(encrypted, importedKey, iv);
+      const encrypted = await encrypt(plaintext, originalKey, iv);
+      const decrypted = await decrypt(encrypted, importedKey, iv);
       
       expect(decrypted).toBe(plaintext);
     });
@@ -138,6 +140,30 @@ describe('KeyManager', () => {
       const key = await generateTestKey(false);
       
       await expect(exportTestKey(key)).rejects.toThrow();
+    });
+  });
+
+  describe('Roundtrip Tests', () => {
+    it('should handle typical OpenAI API key', async () => {
+      const result = await testRoundtrip(getTestData().openai);
+      
+      expect(result.matches).toBe(true);
+      expect(result.original).toBe(getTestData().openai);
+    });
+
+    it('should handle Anthropic API key format', async () => {
+      const result = await testRoundtrip(getTestData().anthropic);
+      
+      expect(result.matches).toBe(true);
+    });
+
+    it('should preserve data integrity across encryption/decryption', async () => {
+      const allTestData = getTestData();
+      
+      for (const [name, value] of Object.entries(allTestData)) {
+        const result = await testRoundtrip(value);
+        expect(result.matches).toBe(true, `Failed for ${name}`);
+      }
     });
   });
 });
