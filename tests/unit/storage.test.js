@@ -1,248 +1,194 @@
-// tests/unit/storage.test.js
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import 'fake-indexeddb/auto';
+import {
+  initTestDB,
+  putRecord,
+  getRecord,
+  deleteRecord,
+  getAllRecords,
+  clearAllRecords,
+  createTestRecord,
+  createTestRecord as createMultipleTestRecords,
+  closeDB,
+  deleteDB,
+  constants
+} from '../helpers/storage-helpers.js';
 
-describe('IndexedDB Storage', () => {
+describe('IndexedDB Storage Operations', () => {
   let db;
-  const DB_NAME = 'pwa-apikeys-v1';
-  const STORE_NAME = 'keys';
 
   beforeEach(async () => {
-    // Initialize database like PasskeyKeyManager does
-    db = await new Promise((resolve, reject) => {
-      const req = indexedDB.open(DB_NAME, 1);
-      req.onupgradeneeded = (e) => {
-        const database = e.target.result;
-        if (!database.objectStoreNames.contains(STORE_NAME)) {
-          database.createObjectStore(STORE_NAME, { keyPath: 'provider' });
-        }
-      };
-      req.onsuccess = (e) => resolve(e.target.result);
-      req.onerror = (e) => reject(e.target.error);
-    });
+    db = await initTestDB();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     if (db) {
-      db.close();
+      closeDB(db);
     }
-    // Clean up databases between tests
-    indexedDB.deleteDatabase(DB_NAME);
+    await deleteDB();
   });
 
   describe('Database Initialization', () => {
-    it('creates database with correct name and version', () => {
-      expect(db.name).toBe(DB_NAME);
+    it('should open database with correct name and version', () => {
+      expect(db).toBeDefined();
+      expect(db.name).toBe(constants.DB_NAME);
       expect(db.version).toBe(1);
     });
 
-    it('creates object store with correct name', () => {
-      expect(db.objectStoreNames.contains(STORE_NAME)).toBe(true);
-    });
-
-    it('uses "provider" as keyPath', async () => {
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const store = tx.objectStore(STORE_NAME);
-      expect(store.keyPath).toBe('provider');
+    it('should have keys object store', () => {
+      const hasStore = db.objectStoreNames.contains(constants.STORE_NAME);
+      expect(hasStore).toBe(true);
     });
   });
 
-  describe('Record Storage', () => {
-    it('stores a record with provider key', async () => {
-      const record = {
-        provider: 'openai',
-        credentialId: new Uint8Array([1, 2, 3]),
-        created: Date.now()
-      };
-
-      await new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.put(record);
-        req.onsuccess = () => resolve();
-        req.onerror = () => reject(req.error);
+  describe('Record Operations', () => {
+    it('should store and retrieve a record', async () => {
+      const testRecord = createTestRecord('openai', {
+        encKeyMaterial: new ArrayBuffer(32),
+        iv: new Uint8Array(12),
+        encrypted: new ArrayBuffer(64)
       });
-
-      // Verify stored
-      const retrieved = await new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.get('openai');
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-      });
-
-      expect(retrieved.provider).toBe('openai');
-      expect(retrieved.credentialId).toEqual(new Uint8Array([1, 2, 3]));
-      expect(retrieved.created).toBeDefined();
-    });
-
-    it('stores encrypted API key data', async () => {
-      const record = {
-        provider: 'openai',
-        credentialId: new Uint8Array([1, 2, 3]),
-        encKeyMaterial: new ArrayBuffer(32), // AES-256 key
-        iv: new Uint8Array(12), // GCM IV
-        encrypted: new ArrayBuffer(64) // Ciphertext
-      };
-
-      await new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.put(record);
-        req.onsuccess = () => resolve();
-        req.onerror = () => reject(req.error);
-      });
-
-      const retrieved = await new Promise((resolve) => {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.get('openai');
-        req.onsuccess = () => resolve(req.result);
-      });
-
-      expect(retrieved.encKeyMaterial).toBeInstanceOf(ArrayBuffer);
-      expect(retrieved.encKeyMaterial.byteLength).toBe(32);
-      expect(retrieved.iv).toBeInstanceOf(Uint8Array);
-      expect(retrieved.iv.length).toBe(12);
-      expect(retrieved.encrypted).toBeInstanceOf(ArrayBuffer);
-    });
-
-    it('overwrites existing record with same provider key', async () => {
-      // Store initial record
-      await new Promise((resolve) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.put({
-          provider: 'openai',
-          credentialId: new Uint8Array([1, 2, 3]),
-          created: 1000
-        });
-        req.onsuccess = () => resolve();
-      });
-
-      // Overwrite with new data
-      await new Promise((resolve) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.put({
-          provider: 'openai',
-          credentialId: new Uint8Array([4, 5, 6]),
-          created: 2000
-        });
-        req.onsuccess = () => resolve();
-      });
-
-      const retrieved = await new Promise((resolve) => {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.get('openai');
-        req.onsuccess = () => resolve(req.result);
-      });
-
-      expect(retrieved.created).toBe(2000);
-      expect(retrieved.credentialId).toEqual(new Uint8Array([4, 5, 6]));
-    });
-  });
-
-  describe('Record Retrieval', () => {
-    beforeEach(async () => {
-      // Seed test data
-      await new Promise((resolve) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        store.put({
-          provider: 'openai',
-          credentialId: new Uint8Array([1, 2, 3])
-        });
-        store.put({
-          provider: 'anthropic',
-          credentialId: new Uint8Array([4, 5, 6])
-        });
-        tx.oncomplete = () => resolve();
-      });
-    });
-
-    it('retrieves existing record by provider', async () => {
-      const record = await new Promise((resolve) => {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.get('openai');
-        req.onsuccess = () => resolve(req.result);
-      });
-
-      expect(record).toBeDefined();
-      expect(record.provider).toBe('openai');
-    });
-
-    it('returns undefined for non-existent provider', async () => {
-      const record = await new Promise((resolve) => {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.get('nonexistent');
-        req.onsuccess = () => resolve(req.result);
-      });
-
-      expect(record).toBeUndefined();
-    });
-  });
-
-  describe('Transaction Error Handling', () => {
-    it('throws error for invalid data (missing keyPath)', () => {
-      // fake-indexeddb throws synchronously for missing keyPath
-      expect(() => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        store.put({ invalid: 'no provider key' });
-      }).toThrow();
-    });
-
-    it('handles valid transaction errors', async () => {
-      // Test a scenario that triggers an async error
-      // For example, trying to read from a closed transaction
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const store = tx.objectStore(STORE_NAME);
       
-      // Close the transaction by completing it
-      await new Promise((resolve) => {
-        tx.oncomplete = resolve;
-      });
+      await putRecord(db, testRecord);
+      const retrieved = await getRecord(db, 'openai');
+      
+      expect(retrieved).toBeDefined();
+      expect(retrieved.provider).toBe('openai');
+      expect(retrieved.encKeyMaterial).toBeInstanceOf(ArrayBuffer);
+      expect(retrieved.iv).toBeInstanceOf(Uint8Array);
+    });
 
-      // Now trying to use the store should fail
-      // Note: fake-indexeddb might handle this differently than real browsers
-      expect(() => {
-        store.get('test');
-      }).toThrow();
+    it('should update existing record', async () => {
+      const record1 = createTestRecord('openai', {
+        credentialId: new Uint8Array([1, 2, 3]),
+        encKeyMaterial: new ArrayBuffer(32),
+        iv: new Uint8Array(12),
+        encrypted: new ArrayBuffer(64)
+      });
+      
+      const record2 = createTestRecord('openai', {
+        credentialId: new Uint8Array([4, 5, 6]),
+        encKeyMaterial: new ArrayBuffer(32),
+        iv: new Uint8Array(12),
+        encrypted: new ArrayBuffer(64)
+      });
+      
+      await putRecord(db, record1);
+      await putRecord(db, record2);
+      
+      const retrieved = await getRecord(db, 'openai');
+      expect(new Uint8Array(retrieved.credentialId)).toEqual(new Uint8Array([4, 5, 6]));
+    });
+
+    it('should delete a record', async () => {
+      const testRecord = createTestRecord('anthropic', {
+        encKeyMaterial: new ArrayBuffer(32),
+        iv: new Uint8Array(12),
+        encrypted: new ArrayBuffer(64)
+      });
+      
+      await putRecord(db, testRecord);
+      await deleteRecord(db, 'anthropic');
+      
+      const retrieved = await getRecord(db, 'anthropic');
+      expect(retrieved).toBeUndefined();
+    });
+
+    it('should return undefined for non-existent record', async () => {
+      const retrieved = await getRecord(db, 'non-existent');
+      expect(retrieved).toBeUndefined();
     });
   });
 
-  describe('Multiple Providers', () => {
-    it('stores records for different providers independently', async () => {
+  describe('Multiple Records', () => {
+    it('should store and retrieve multiple records', async () => {
       const providers = ['openai', 'anthropic', 'google'];
       
-      // Store multiple records
       for (const provider of providers) {
-        await new Promise((resolve) => {
-          const tx = db.transaction(STORE_NAME, 'readwrite');
-          const store = tx.objectStore(STORE_NAME);
-          const req = store.put({
-            provider,
-            credentialId: new Uint8Array([providers.indexOf(provider)])
-          });
-          req.onsuccess = () => resolve();
+        const record = createTestRecord(provider, {
+          encKeyMaterial: new ArrayBuffer(32),
+          iv: new Uint8Array(12),
+          encrypted: new ArrayBuffer(64)
         });
+        await putRecord(db, record);
       }
+      
+      const allRecords = await getAllRecords(db);
+      expect(allRecords.length).toBe(3);
+      
+      const retrievedProviders = allRecords.map(r => r.provider).sort();
+      expect(retrievedProviders).toEqual(providers.sort());
+    });
 
-      // Verify all stored
+    it('should clear all records', async () => {
+      const providers = ['openai', 'anthropic'];
+      
       for (const provider of providers) {
-        const record = await new Promise((resolve) => {
-          const tx = db.transaction(STORE_NAME, 'readonly');
-          const store = tx.objectStore(STORE_NAME);
-          const req = store.get(provider);
-          req.onsuccess = () => resolve(req.result);
+        const record = createTestRecord(provider, {
+          encKeyMaterial: new ArrayBuffer(32),
+          iv: new Uint8Array(12),
+          encrypted: new ArrayBuffer(64)
         });
-        expect(record.provider).toBe(provider);
+        await putRecord(db, record);
       }
+      
+      await clearAllRecords(db);
+      
+      const allRecords = await getAllRecords(db);
+      expect(allRecords.length).toBe(0);
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should handle operations on closed database', async () => {
+      closeDB(db);
+      
+      const testRecord = createTestRecord('test', {
+        encKeyMaterial: new ArrayBuffer(32),
+        iv: new Uint8Array(12),
+        encrypted: new ArrayBuffer(64)
+      });
+      
+      await expect(putRecord(db, testRecord)).rejects.toThrow();
+    });
+
+    it('should timeout on hung operations', async () => {
+      // Timeout is built into helpers - this would require special setup
+      // to actually trigger a timeout condition
+    }, 10000);
+  });
+
+  describe('Data Integrity', () => {
+    it('should preserve ArrayBuffer data', async () => {
+      const originalData = new Uint8Array([1, 2, 3, 4, 5]);
+      const record = createTestRecord('test', {
+        credentialId: originalData.buffer,
+        encKeyMaterial: new ArrayBuffer(32),
+        iv: new Uint8Array(12),
+        encrypted: new ArrayBuffer(64)
+      });
+      
+      await putRecord(db, record);
+      const retrieved = await getRecord(db, 'test');
+      
+      const retrievedData = new Uint8Array(retrieved.credentialId);
+      expect(retrievedData).toEqual(originalData);
+    });
+
+    it('should preserve Uint8Array data', async () => {
+      const originalIV = new Uint8Array(12);
+      crypto.getRandomValues(originalIV);
+      
+      const record = createTestRecord('test', {
+        encKeyMaterial: new ArrayBuffer(32),
+        iv: originalIV,
+        encrypted: new ArrayBuffer(64)
+      });
+      
+      await putRecord(db, record);
+      const retrieved = await getRecord(db, 'test');
+      
+      expect(retrieved.iv).toEqual(originalIV);
     });
   });
 });

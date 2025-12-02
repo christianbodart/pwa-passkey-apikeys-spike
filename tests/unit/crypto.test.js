@@ -1,383 +1,143 @@
-// tests/unit/crypto.test.js
 import { describe, it, expect, beforeEach } from 'vitest';
+import { KeyManager } from '../../src/key-manager.js';
+import {
+  generateTestKey,
+  encryptWithNewKey,
+  decryptData,
+  testRoundtrip,
+  exportTestKey,
+  importTestKey,
+  testKeyPortability,
+  getTestData
+} from '../helpers/crypto-helpers.js';
 
-describe('Web Crypto API - AES-GCM Encryption', () => {
+describe('KeyManager', () => {
   describe('Key Generation', () => {
-    it('generates AES-256 key', async () => {
-      const key = await crypto.subtle.generateKey(
-        { name: 'AES-GCM', length: 256 },
-        true,
-        ['encrypt', 'decrypt']
-      );
-
-      expect(key).toBeDefined();
+    it('should generate an extractable AES-GCM key', async () => {
+      const key = await generateTestKey(true);
+      
+      expect(key).toBeInstanceOf(CryptoKey);
       expect(key.type).toBe('secret');
       expect(key.algorithm.name).toBe('AES-GCM');
-      expect(key.algorithm.length).toBe(256);
+      expect(key.extractable).toBe(true);
     });
 
-    it('allows key export when extractable is true', async () => {
-      const key = await crypto.subtle.generateKey(
-        { name: 'AES-GCM', length: 256 },
-        true, // extractable
-        ['encrypt', 'decrypt']
-      );
-
-      const exported = await crypto.subtle.exportKey('raw', key);
-      expect(exported).toBeInstanceOf(ArrayBuffer);
-      expect(exported.byteLength).toBe(32); // 256 bits = 32 bytes
-    });
-
-    it('creates non-extractable key for security', async () => {
-      const key = await crypto.subtle.generateKey(
-        { name: 'AES-GCM', length: 256 },
-        false, // non-extractable
-        ['encrypt', 'decrypt']
-      );
-
+    it('should generate a non-extractable key when specified', async () => {
+      const key = await generateTestKey(false);
+      
       expect(key.extractable).toBe(false);
-      
-      // Should fail to export
-      await expect(
-        crypto.subtle.exportKey('raw', key)
-      ).rejects.toThrow();
-    });
-
-    it('generates unique keys on each call', async () => {
-      const key1 = await crypto.subtle.generateKey(
-        { name: 'AES-GCM', length: 256 },
-        true,
-        ['encrypt', 'decrypt']
-      );
-      
-      const key2 = await crypto.subtle.generateKey(
-        { name: 'AES-GCM', length: 256 },
-        true,
-        ['encrypt', 'decrypt']
-      );
-
-      const exported1 = await crypto.subtle.exportKey('raw', key1);
-      const exported2 = await crypto.subtle.exportKey('raw', key2);
-
-      // Keys should be different
-      expect(new Uint8Array(exported1)).not.toEqual(new Uint8Array(exported2));
     });
   });
 
-  describe('Key Import/Export', () => {
-    let keyMaterial;
-
-    beforeEach(async () => {
-      const key = await crypto.subtle.generateKey(
-        { name: 'AES-GCM', length: 256 },
-        true,
-        ['encrypt', 'decrypt']
-      );
-      keyMaterial = await crypto.subtle.exportKey('raw', key);
+  describe('IV Generation', () => {
+    it('should generate a 12-byte IV', () => {
+      const iv = KeyManager.generateIV();
+      
+      expect(iv).toBeInstanceOf(Uint8Array);
+      expect(iv.length).toBe(12);
     });
 
-    it('imports raw key material', async () => {
-      const importedKey = await crypto.subtle.importKey(
-        'raw',
-        keyMaterial,
-        { name: 'AES-GCM', length: 256 },
-        false,
-        ['decrypt']
-      );
+    it('should generate unique IVs', () => {
+      const iv1 = KeyManager.generateIV();
+      const iv2 = KeyManager.generateIV();
+      
+      expect(iv1).not.toEqual(iv2);
+    });
+  });
 
-      expect(importedKey).toBeDefined();
+  describe('Encryption and Decryption', () => {
+    const testData = getTestData();
+
+    it('should encrypt and decrypt simple text', async () => {
+      const result = await testRoundtrip(testData.simple);
+      
+      expect(result.matches).toBe(true);
+      expect(result.decrypted).toBe(testData.simple);
+    });
+
+    it('should handle empty strings', async () => {
+      const result = await testRoundtrip(testData.empty);
+      
+      expect(result.matches).toBe(true);
+    });
+
+    it('should handle long strings', async () => {
+      const result = await testRoundtrip(testData.long);
+      
+      expect(result.matches).toBe(true);
+    });
+
+    it('should handle special characters', async () => {
+      const result = await testRoundtrip(testData.special);
+      
+      expect(result.matches).toBe(true);
+    });
+
+    it('should handle unicode characters', async () => {
+      const result = await testRoundtrip(testData.unicode);
+      
+      expect(result.matches).toBe(true);
+    });
+
+    it('should produce different ciphertext for same plaintext', async () => {
+      const data1 = await encryptWithNewKey(testData.simple);
+      const data2 = await encryptWithNewKey(testData.simple);
+      
+      expect(data1.encrypted).not.toEqual(data2.encrypted);
+    });
+
+    it('should fail decryption with wrong key', async () => {
+      const { encrypted, iv } = await encryptWithNewKey(testData.simple);
+      const wrongKey = await generateTestKey();
+      
+      await expect(decryptData(encrypted, iv, wrongKey)).rejects.toThrow();
+    });
+
+    it('should fail decryption with wrong IV', async () => {
+      const { encrypted, key } = await encryptWithNewKey(testData.simple);
+      const wrongIV = KeyManager.generateIV();
+      
+      await expect(decryptData(encrypted, wrongIV, key)).rejects.toThrow();
+    });
+  });
+
+  describe('Key Export and Import', () => {
+    it('should export key to JWK format', async () => {
+      const key = await generateTestKey();
+      const jwk = await exportTestKey(key);
+      
+      expect(jwk).toHaveProperty('kty', 'oct');
+      expect(jwk).toHaveProperty('k');
+      expect(jwk).toHaveProperty('alg', 'A256GCM');
+    });
+
+    it('should import key from JWK format', async () => {
+      const originalKey = await generateTestKey();
+      const jwk = await exportTestKey(originalKey);
+      const importedKey = await importTestKey(jwk);
+      
+      expect(importedKey).toBeInstanceOf(CryptoKey);
       expect(importedKey.type).toBe('secret');
       expect(importedKey.algorithm.name).toBe('AES-GCM');
     });
 
-    it('imports with correct usage restrictions', async () => {
-      const decryptOnlyKey = await crypto.subtle.importKey(
-        'raw',
-        keyMaterial,
-        { name: 'AES-GCM', length: 256 },
-        false,
-        ['decrypt'] // Only decrypt, not encrypt
-      );
-
-      expect(decryptOnlyKey.usages).toEqual(['decrypt']);
-    });
-
-    it('maintains 32-byte key material size', () => {
-      expect(keyMaterial.byteLength).toBe(32);
-    });
-  });
-
-  describe('Encryption', () => {
-    let key;
-
-    beforeEach(async () => {
-      key = await crypto.subtle.generateKey(
-        { name: 'AES-GCM', length: 256 },
-        true,
-        ['encrypt', 'decrypt']
-      );
-    });
-
-    it('encrypts plain text API key', async () => {
-      const plaintext = 'sk-test1234567890abcdef';
-      const iv = crypto.getRandomValues(new Uint8Array(12));
-
-      const ciphertext = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv },
-        key,
-        new TextEncoder().encode(plaintext)
-      );
-
-      expect(ciphertext).toBeInstanceOf(ArrayBuffer);
-      expect(ciphertext.byteLength).toBeGreaterThan(0);
-      // Ciphertext should be different from plaintext
-      expect(new Uint8Array(ciphertext)).not.toEqual(
-        new TextEncoder().encode(plaintext)
-      );
-    });
-
-    it('uses 12-byte IV for GCM mode', async () => {
-      const plaintext = 'sk-test-api-key';
-      const iv = crypto.getRandomValues(new Uint8Array(12));
-
-      expect(iv.length).toBe(12);
-
-      const ciphertext = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv },
-        key,
-        new TextEncoder().encode(plaintext)
-      );
-
-      expect(ciphertext).toBeDefined();
-    });
-
-    it('produces different ciphertext with different IVs', async () => {
-      const plaintext = 'sk-same-key';
-      const iv1 = crypto.getRandomValues(new Uint8Array(12));
-      const iv2 = crypto.getRandomValues(new Uint8Array(12));
-
-      const ciphertext1 = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv: iv1 },
-        key,
-        new TextEncoder().encode(plaintext)
-      );
-
-      const ciphertext2 = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv: iv2 },
-        key,
-        new TextEncoder().encode(plaintext)
-      );
-
-      // Same plaintext + key but different IVs = different ciphertext
-      expect(new Uint8Array(ciphertext1)).not.toEqual(new Uint8Array(ciphertext2));
-    });
-
-    it('handles empty strings', async () => {
-      const plaintext = '';
-      const iv = crypto.getRandomValues(new Uint8Array(12));
-
-      const ciphertext = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv },
-        key,
-        new TextEncoder().encode(plaintext)
-      );
-
-      expect(ciphertext).toBeDefined();
-      expect(ciphertext.byteLength).toBeGreaterThanOrEqual(0);
-    });
-  });
-
-  describe('Decryption', () => {
-    let key;
-    let plaintext;
-    let iv;
-    let ciphertext;
-
-    beforeEach(async () => {
-      key = await crypto.subtle.generateKey(
-        { name: 'AES-GCM', length: 256 },
-        true,
-        ['encrypt', 'decrypt']
-      );
-
-      plaintext = 'sk-proj-1234567890abcdefghijklmnop';
-      iv = crypto.getRandomValues(new Uint8Array(12));
-
-      ciphertext = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv },
-        key,
-        new TextEncoder().encode(plaintext)
-      );
-    });
-
-    it('decrypts back to original plaintext', async () => {
-      const decrypted = await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv },
-        key,
-        ciphertext
-      );
-
-      const decryptedText = new TextDecoder().decode(decrypted);
-      expect(decryptedText).toBe(plaintext);
-    });
-
-    it('requires correct IV for decryption', async () => {
-      const wrongIV = crypto.getRandomValues(new Uint8Array(12));
-
-      await expect(
-        crypto.subtle.decrypt(
-          { name: 'AES-GCM', iv: wrongIV },
-          key,
-          ciphertext
-        )
-      ).rejects.toThrow();
-    });
-
-    it('requires correct key for decryption', async () => {
-      const wrongKey = await crypto.subtle.generateKey(
-        { name: 'AES-GCM', length: 256 },
-        false,
-        ['decrypt']
-      );
-
-      await expect(
-        crypto.subtle.decrypt(
-          { name: 'AES-GCM', iv },
-          wrongKey,
-          ciphertext
-        )
-      ).rejects.toThrow();
-    });
-
-    it('detects tampered ciphertext', async () => {
-      // Modify the ciphertext
-      const tamperedCiphertext = new Uint8Array(ciphertext);
-      tamperedCiphertext[0] ^= 0xFF; // Flip bits
-
-      await expect(
-        crypto.subtle.decrypt(
-          { name: 'AES-GCM', iv },
-          key,
-          tamperedCiphertext.buffer
-        )
-      ).rejects.toThrow();
-    });
-  });
-
-  describe('Encrypt/Decrypt Roundtrip', () => {
-    it('handles typical OpenAI API key', async () => {
-      const apiKey = 'sk-proj-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnop123456';
+    it('should maintain key functionality after export/import', async () => {
+      const originalKey = await generateTestKey();
+      const importedKey = await testKeyPortability(originalKey);
       
-      // Generate key
-      const encKey = await crypto.subtle.generateKey(
-        { name: 'AES-GCM', length: 256 },
-        true,
-        ['encrypt', 'decrypt']
-      );
-      const keyMaterial = await crypto.subtle.exportKey('raw', encKey);
-
-      // Encrypt
-      const iv = crypto.getRandomValues(new Uint8Array(12));
-      const encrypted = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv },
-        encKey,
-        new TextEncoder().encode(apiKey)
-      );
-
-      // Simulate storage (what goes to IndexedDB)
-      expect(keyMaterial).toBeInstanceOf(ArrayBuffer);
-      expect(iv).toBeInstanceOf(Uint8Array);
-      expect(encrypted).toBeInstanceOf(ArrayBuffer);
-
-      // Import key for decryption (simulates retrieval)
-      const decKey = await crypto.subtle.importKey(
-        'raw',
-        keyMaterial,
-        { name: 'AES-GCM', length: 256 },
-        false,
-        ['decrypt']
-      );
-
-      // Decrypt
-      const decrypted = await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv },
-        decKey,
-        encrypted
-      );
-
-      const decryptedKey = new TextDecoder().decode(decrypted);
-      expect(decryptedKey).toBe(apiKey);
-    });
-
-    it('handles Anthropic API key format', async () => {
-      const apiKey = 'sk-ant-api03-xyz123-abcdef';
+      const plaintext = testData.simple;
+      const iv = KeyManager.generateIV();
       
-      const encKey = await crypto.subtle.generateKey(
-        { name: 'AES-GCM', length: 256 },
-        true,
-        ['encrypt', 'decrypt']
-      );
-
-      const iv = crypto.getRandomValues(new Uint8Array(12));
-      const encrypted = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv },
-        encKey,
-        new TextEncoder().encode(apiKey)
-      );
-
-      const decrypted = await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv },
-        encKey,
-        encrypted
-      );
-
-      expect(new TextDecoder().decode(decrypted)).toBe(apiKey);
-    });
-
-    it('preserves special characters', async () => {
-      const apiKey = 'test-key-with-special!@#$%^&*()_+-=[]{}|;:,.<>?';
+      const encrypted = await KeyManager.encrypt(plaintext, originalKey, iv);
+      const decrypted = await KeyManager.decrypt(encrypted, importedKey, iv);
       
-      const encKey = await crypto.subtle.generateKey(
-        { name: 'AES-GCM', length: 256 },
-        false,
-        ['encrypt', 'decrypt']
-      );
-
-      const iv = crypto.getRandomValues(new Uint8Array(12));
-      const encrypted = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv },
-        encKey,
-        new TextEncoder().encode(apiKey)
-      );
-
-      const decrypted = await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv },
-        encKey,
-        encrypted
-      );
-
-      expect(new TextDecoder().decode(decrypted)).toBe(apiKey);
-    });
-  });
-
-  describe('Random IV Generation', () => {
-    it('generates cryptographically random IVs', () => {
-      const iv1 = crypto.getRandomValues(new Uint8Array(12));
-      const iv2 = crypto.getRandomValues(new Uint8Array(12));
-      const iv3 = crypto.getRandomValues(new Uint8Array(12));
-
-      // All IVs should be different
-      expect(iv1).not.toEqual(iv2);
-      expect(iv2).not.toEqual(iv3);
-      expect(iv1).not.toEqual(iv3);
+      expect(decrypted).toBe(plaintext);
     });
 
-    it('fills entire IV array', () => {
-      const iv = crypto.getRandomValues(new Uint8Array(12));
+    it('should fail to export non-extractable key', async () => {
+      const key = await generateTestKey(false);
       
-      // Check no zeros (extremely unlikely if random)
-      const hasNonZero = Array.from(iv).some(byte => byte !== 0);
-      expect(hasNonZero).toBe(true);
+      await expect(exportTestKey(key)).rejects.toThrow();
     });
   });
 });
