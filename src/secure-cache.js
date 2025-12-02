@@ -18,6 +18,8 @@ export class SecureCache {
       timer: null,
       created: null
     };
+    // FIX: Clear any previous WeakMap reference
+    cache.delete(cacheKey);
   }
 
   /**
@@ -29,6 +31,9 @@ export class SecureCache {
    */
   store(value, expiryMs = 15 * 60 * 1000, onExpire = null) {
     try {
+      // Clear existing first
+      cache.delete(cacheKey);
+      
       // XOR encode the value
       const encoder = new TextEncoder();
       const bytes = encoder.encode(value);
@@ -58,6 +63,9 @@ export class SecureCache {
    * @returns {string|null}
    */
   retrieve() {
+    // FIX: Check if timer expired
+    if (!this[CACHE_SYMBOL]?.timer) return null;
+    
     try {
       const cached = cache.get(cacheKey);
       if (!cached) return null;
@@ -129,10 +137,10 @@ export class SecureCache {
   /**
    * Get time until expiry
    * @param {number} totalDuration - Total duration in ms
-   * @returns {number|null} - Milliseconds remaining, or null if no cache
+   * @returns {number} - Milliseconds remaining, 0 if expired/no cache
    */
   getTimeRemaining(totalDuration) {
-    if (!this[CACHE_SYMBOL]?.created) return null;
+    if (!this[CACHE_SYMBOL]?.created) return 0;
     
     const elapsed = Date.now() - this[CACHE_SYMBOL].created;
     const remaining = totalDuration - elapsed;
