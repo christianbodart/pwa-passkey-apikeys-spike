@@ -47,8 +47,8 @@ export class PasskeyKeyManager {
     this.sessionManager.on('started', ({ provider }) => {
       this.emit('sessionStarted', { provider });
     });
-    this.sessionManager.on('extended', ({ provider }) => {
-      this.emit('sessionExtended', { provider });
+    this.sessionManager.on('extended', ({ provider, duration }) => {
+      this.emit('sessionExtended', { provider, duration });
     });
   }
 
