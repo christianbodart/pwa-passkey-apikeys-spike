@@ -1,4 +1,3 @@
-import { StorageService } from '../../src/storage.js';
 import { withTimeout, retry } from './test-utils.js';
 
 /**
@@ -91,7 +90,7 @@ export async function getAllRecords(db) {
       const store = transaction.objectStore('keys');
       const request = store.getAll();
       
-      request.onsuccess = () => resolve(request.result);
+      request.onsuccess = () => resolve(request.result || []);
       request.onerror = () => reject(request.error);
       transaction.onerror = () => reject(transaction.error);
     });
@@ -118,7 +117,8 @@ export async function clearAllRecords(db) {
 }
 
 /**
- * Creates a test record
+ * Creates a test record matching the actual storage structure
+ * Fields match what app.js stores in storage.put()
  * @param {string} provider - Provider name
  * @param {Object} overrides - Optional field overrides
  * @returns {Object} Test record
@@ -126,10 +126,12 @@ export async function clearAllRecords(db) {
 export function createTestRecord(provider = 'test-provider', overrides = {}) {
   return {
     provider,
-    encryptedKey: new ArrayBuffer(32),
-    iv: new Uint8Array(12),
-    credentialId: 'test-credential-id',
-    createdAt: Date.now(),
+    credentialId: overrides.credentialId || new Uint8Array([1, 2, 3]),
+    encKeyMaterial: overrides.encKeyMaterial || new ArrayBuffer(32),
+    iv: overrides.iv || new Uint8Array(12),
+    encrypted: overrides.encrypted || new ArrayBuffer(64),
+    created: overrides.created || Date.now(),
+    updated: overrides.updated || Date.now(),
     ...overrides
   };
 }
@@ -149,6 +151,9 @@ export function createMultipleTestRecords(providers = ['openai', 'anthropic', 'g
  * @returns {boolean} True if valid
  */
 export function validateRecord(record) {
-  const requiredFields = ['provider', 'encryptedKey', 'iv', 'credentialId', 'createdAt'];
+  const requiredFields = ['provider', 'credentialId', 'encKeyMaterial', 'iv', 'encrypted'];
   return requiredFields.every(field => record && record[field] !== undefined);
 }
+
+// Re-export withTimeout for tests
+export { withTimeout };
