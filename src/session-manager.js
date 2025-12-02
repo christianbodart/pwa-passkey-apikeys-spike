@@ -79,8 +79,7 @@ export class SessionManager {
    * @returns {boolean}
    */
   hasSession(provider) {
-    const session = this.sessions.get(provider);
-    return session && session.cache.has();
+    return this.sessions.has(provider);
   }
 
   /**
