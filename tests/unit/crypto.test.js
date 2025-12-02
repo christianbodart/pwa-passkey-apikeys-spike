@@ -104,6 +104,8 @@ describe('Web Crypto API - AES-GCM Encryption', () => {
   });
 
   describe('Key Export and Import', () => {
+    const testData = getTestData();
+
     it('should export key to JWK format', async () => {
       const key = await generateTestKey();
       const jwk = await exportTestKey(key);
@@ -127,7 +129,7 @@ describe('Web Crypto API - AES-GCM Encryption', () => {
       const originalKey = await generateTestKey();
       const importedKey = await testKeyPortability(originalKey);
       
-      const plaintext = getTestData().simple;
+      const plaintext = testData.simple;
       const iv = generateIV();
       
       const encrypted = await encrypt(plaintext, originalKey, iv);
