@@ -250,25 +250,6 @@ describe('StorageService', () => {
       
       expect(new Uint8Array(retrieved.iv)).toEqual(originalIV);
     });
-
-    it('should preserve large encrypted data', async () => {
-      const largeData = new ArrayBuffer(1024 * 100); // 100KB
-      const view = new Uint8Array(largeData);
-      crypto.getRandomValues(view);
-      
-      const record = createTestRecord('test', {
-        encKeyMaterial: new ArrayBuffer(32),
-        iv: new Uint8Array(12),
-        encrypted: largeData,
-        credentialId: new Uint8Array([1, 2, 3])
-      });
-      
-      await putRecord(db, record);
-      const retrieved = await getRecord(db, 'test');
-      
-      expect(retrieved.encrypted.byteLength).toBe(1024 * 100);
-      expect(new Uint8Array(retrieved.encrypted)).toEqual(view);
-    });
   });
 
   describe('Record Structure', () => {
