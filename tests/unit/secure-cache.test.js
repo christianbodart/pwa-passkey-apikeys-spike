@@ -207,8 +207,8 @@ describe('SecureCache', () => {
   });
 
   describe('Time Remaining', () => {
-    it('returns null when no cache', () => {
-      expect(cache.getTimeRemaining(1000)).toBeNull();
+    it('returns 0 when no cache', () => {
+      expect(cache.getTimeRemaining(1000)).toBe(0);
     });
 
     it('calculates time remaining correctly', () => {
