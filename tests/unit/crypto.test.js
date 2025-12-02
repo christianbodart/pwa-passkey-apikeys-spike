@@ -127,7 +127,7 @@ describe('Web Crypto API - AES-GCM Encryption', () => {
       const originalKey = await generateTestKey();
       const importedKey = await testKeyPortability(originalKey);
       
-      const plaintext = testData.simple;
+      const plaintext = getTestData().simple;
       const iv = generateIV();
       
       const encrypted = await encrypt(plaintext, originalKey, iv);
