@@ -80,7 +80,7 @@ export class SessionManager {
    */
   hasSession(provider) {
     const session = this.sessions.get(provider);
-    return session && session.cache.has();
+    return !!session && session.cache.has();
   }
 
   /**
@@ -99,7 +99,7 @@ export class SessionManager {
     // Update start time
     session.startTime = Date.now();
     
-    this.emit('extended', { provider, duration: session.duration });
+    this.emit('extended', { provider: provider, duration: session.duration });
   }
 
   /**
