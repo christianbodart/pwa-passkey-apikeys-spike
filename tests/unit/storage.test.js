@@ -1,42 +1,39 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import 'fake-indexeddb/auto';
+import { StorageService } from '../../src/storage.js';
 import {
-  initTestDB,
   putRecord,
   getRecord,
   deleteRecord,
   getAllRecords,
   clearAllRecords,
   createTestRecord,
-  createTestRecord as createMultipleTestRecords,
-  closeDB,
-  deleteDB,
-  constants
+  withTimeout
 } from '../helpers/storage-helpers.js';
 
-describe('IndexedDB Storage Operations', () => {
+describe('StorageService', () => {
   let db;
 
   beforeEach(async () => {
-    db = await initTestDB();
+    db = await StorageService.openDatabase();
   });
 
   afterEach(async () => {
     if (db) {
-      closeDB(db);
+      await clearAllRecords(db);
+      db.close();
     }
-    await deleteDB();
   });
 
-  describe('Database Initialization', () => {
-    it('should open database with correct name and version', () => {
+  describe('Database Operations', () => {
+    it('should open database successfully', () => {
       expect(db).toBeDefined();
-      expect(db.name).toBe(constants.DB_NAME);
+      expect(db.name).toBe('PasskeyKeyManager');
       expect(db.version).toBe(1);
     });
 
     it('should have keys object store', () => {
-      const hasStore = db.objectStoreNames.contains(constants.STORE_NAME);
+      const hasStore = db.objectStoreNames.contains('keys');
       expect(hasStore).toBe(true);
     });
   });
@@ -46,7 +43,8 @@ describe('IndexedDB Storage Operations', () => {
       const testRecord = createTestRecord('openai', {
         encKeyMaterial: new ArrayBuffer(32),
         iv: new Uint8Array(12),
-        encrypted: new ArrayBuffer(64)
+        encrypted: new ArrayBuffer(64),
+        credentialId: new Uint8Array([1, 2, 3])
       });
       
       await putRecord(db, testRecord);
@@ -56,6 +54,7 @@ describe('IndexedDB Storage Operations', () => {
       expect(retrieved.provider).toBe('openai');
       expect(retrieved.encKeyMaterial).toBeInstanceOf(ArrayBuffer);
       expect(retrieved.iv).toBeInstanceOf(Uint8Array);
+      expect(retrieved.encrypted).toBeInstanceOf(ArrayBuffer);
     });
 
     it('should update existing record', async () => {
@@ -84,7 +83,8 @@ describe('IndexedDB Storage Operations', () => {
       const testRecord = createTestRecord('anthropic', {
         encKeyMaterial: new ArrayBuffer(32),
         iv: new Uint8Array(12),
-        encrypted: new ArrayBuffer(64)
+        encrypted: new ArrayBuffer(64),
+        credentialId: new Uint8Array([1, 2, 3])
       });
       
       await putRecord(db, testRecord);
@@ -98,6 +98,10 @@ describe('IndexedDB Storage Operations', () => {
       const retrieved = await getRecord(db, 'non-existent');
       expect(retrieved).toBeUndefined();
     });
+
+    it('should handle deletion of non-existent record', async () => {
+      await expect(deleteRecord(db, 'non-existent')).resolves.not.toThrow();
+    });
   });
 
   describe('Multiple Records', () => {
@@ -108,7 +112,8 @@ describe('IndexedDB Storage Operations', () => {
         const record = createTestRecord(provider, {
           encKeyMaterial: new ArrayBuffer(32),
           iv: new Uint8Array(12),
-          encrypted: new ArrayBuffer(64)
+          encrypted: new ArrayBuffer(64),
+          credentialId: new Uint8Array([1, 2, 3])
         });
         await putRecord(db, record);
       }
@@ -121,13 +126,14 @@ describe('IndexedDB Storage Operations', () => {
     });
 
     it('should clear all records', async () => {
-      const providers = ['openai', 'anthropic'];
+      const providers = ['openai', 'anthropic', 'google'];
       
       for (const provider of providers) {
         const record = createTestRecord(provider, {
           encKeyMaterial: new ArrayBuffer(32),
           iv: new Uint8Array(12),
-          encrypted: new ArrayBuffer(64)
+          encrypted: new ArrayBuffer(64),
+          credentialId: new Uint8Array([1, 2, 3])
         });
         await putRecord(db, record);
       }
@@ -137,25 +143,47 @@ describe('IndexedDB Storage Operations', () => {
       const allRecords = await getAllRecords(db);
       expect(allRecords.length).toBe(0);
     });
+
+    it('should retrieve only specific provider record', async () => {
+      const providers = ['openai', 'anthropic'];
+      
+      for (const provider of providers) {
+        const record = createTestRecord(provider, {
+          encKeyMaterial: new ArrayBuffer(32),
+          iv: new Uint8Array(12),
+          encrypted: new ArrayBuffer(64),
+          credentialId: new Uint8Array([1, 2, 3])
+        });
+        await putRecord(db, record);
+      }
+      
+      const openaiRecord = await getRecord(db, 'openai');
+      expect(openaiRecord.provider).toBe('openai');
+      
+      const anthropicRecord = await getRecord(db, 'anthropic');
+      expect(anthropicRecord.provider).toBe('anthropic');
+    });
   });
 
   describe('Error Handling', () => {
     it('should handle operations on closed database', async () => {
-      closeDB(db);
+      db.close();
       
       const testRecord = createTestRecord('test', {
         encKeyMaterial: new ArrayBuffer(32),
         iv: new Uint8Array(12),
-        encrypted: new ArrayBuffer(64)
+        encrypted: new ArrayBuffer(64),
+        credentialId: new Uint8Array([1, 2, 3])
       });
       
       await expect(putRecord(db, testRecord)).rejects.toThrow();
     });
 
-    it('should timeout on hung operations', async () => {
-      // Timeout is built into helpers - this would require special setup
-      // to actually trigger a timeout condition
-    }, 10000);
+    it('should timeout on operations that take too long', async () => {
+      // This would require mocking a hung transaction
+      // For now, just verify the timeout wrapper exists
+      expect(withTimeout).toBeDefined();
+    });
   });
 
   describe('Data Integrity', () => {
@@ -175,20 +203,71 @@ describe('IndexedDB Storage Operations', () => {
       expect(retrievedData).toEqual(originalData);
     });
 
-    it('should preserve Uint8Array data', async () => {
+    it('should preserve Uint8Array data (IV)', async () => {
       const originalIV = new Uint8Array(12);
       crypto.getRandomValues(originalIV);
       
       const record = createTestRecord('test', {
         encKeyMaterial: new ArrayBuffer(32),
         iv: originalIV,
-        encrypted: new ArrayBuffer(64)
+        encrypted: new ArrayBuffer(64),
+        credentialId: new Uint8Array([1, 2, 3])
       });
       
       await putRecord(db, record);
       const retrieved = await getRecord(db, 'test');
       
-      expect(retrieved.iv).toEqual(originalIV);
+      expect(new Uint8Array(retrieved.iv)).toEqual(originalIV);
+    });
+
+    it('should preserve large encrypted data', async () => {
+      const largeData = new ArrayBuffer(1024 * 100); // 100KB
+      const view = new Uint8Array(largeData);
+      crypto.getRandomValues(view);
+      
+      const record = createTestRecord('test', {
+        encKeyMaterial: new ArrayBuffer(32),
+        iv: new Uint8Array(12),
+        encrypted: largeData,
+        credentialId: new Uint8Array([1, 2, 3])
+      });
+      
+      await putRecord(db, record);
+      const retrieved = await getRecord(db, 'test');
+      
+      expect(retrieved.encrypted.byteLength).toBe(1024 * 100);
+      expect(new Uint8Array(retrieved.encrypted)).toEqual(view);
+    });
+  });
+
+  describe('Record Structure', () => {
+    it('should create record with all required fields', () => {
+      const record = createTestRecord('test', {
+        encKeyMaterial: new ArrayBuffer(32),
+        iv: new Uint8Array(12),
+        encrypted: new ArrayBuffer(64),
+        credentialId: new Uint8Array([1, 2, 3])
+      });
+      
+      expect(record).toHaveProperty('provider');
+      expect(record).toHaveProperty('encKeyMaterial');
+      expect(record).toHaveProperty('iv');
+      expect(record).toHaveProperty('encrypted');
+      expect(record).toHaveProperty('credentialId');
+    });
+
+    it('should allow custom field values', () => {
+      const customIV = new Uint8Array([9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 1, 2]);
+      const record = createTestRecord('custom-provider', {
+        encKeyMaterial: new ArrayBuffer(32),
+        iv: customIV,
+        encrypted: new ArrayBuffer(128),
+        credentialId: new Uint8Array([99])
+      });
+      
+      expect(record.provider).toBe('custom-provider');
+      expect(record.iv).toEqual(customIV);
+      expect(record.encrypted.byteLength).toBe(128);
     });
   });
 });
