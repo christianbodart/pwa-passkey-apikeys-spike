@@ -1,8 +1,8 @@
-&lt;!DOCTYPE html&gt;
-&lt;html&gt;
-&lt;head&gt;
-  &lt;title&gt;Iframe WebAuthn Target&lt;/title&gt;
-  &lt;style&gt;
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Iframe WebAuthn Target</title>
+  <style>
     body { 
       font-family: system-ui; 
       padding: 2rem; 
@@ -39,25 +39,25 @@
     }
     .green { background: #d4edda; color: #155724; border-left: 4px solid #28a745; }
     .red { background: #f8d7da; color: #721c24; border-left: 4px solid #dc3545; }
-  &lt;/style&gt;
-&lt;/head&gt;
-&lt;body&gt;
-  &lt;h1&gt;🔐 Iframe WebAuthn Target&lt;/h1&gt;
+  </style>
+</head>
+<body>
+  <h1>🔐 Iframe WebAuthn Target</h1>
   
-  &lt;div id="status" class="status"&gt;Loading...&lt;/div&gt;
+  <div id="status" class="status">Loading...</div>
   
-  &lt;h2&gt;Iframe Capabilities&lt;/h2&gt;
-  &lt;pre id="capabilities"&gt;&lt;/pre&gt;
+  <h2>Iframe Capabilities</h2>
+  <pre id="capabilities"></pre>
   
-  &lt;div&gt;
-    &lt;button id="test-webauthn"&gt;🧪 Test WebAuthn&lt;/button&gt;
-    &lt;button id="send-message"&gt;📤 Send Message&lt;/button&gt;
-  &lt;/div&gt;
+  <div>
+    <button id="test-webauthn">🧪 Test WebAuthn</button>
+    <button id="send-message">📤 Send Message</button>
+  </div>
   
-  &lt;h3&gt;Messages Sent&lt;/h3&gt;
-  &lt;pre id="messages"&gt;No messages sent&lt;/pre&gt;
+  <h3>Messages Sent</h3>
+  <pre id="messages">No messages sent</pre>
   
-  &lt;script&gt;
+  <script>
     const statusEl = document.getElementById('status');
     const capsEl = document.getElementById('capabilities');
     const messagesEl = document.getElementById('messages');
@@ -166,6 +166,6 @@
     
     // Notify parent iframe is ready
     window.parent.postMessage({ type: 'iframe-ready', timestamp: Date.now() }, '*');
-  &lt;/script&gt;
-&lt;/body&gt;
-&lt;/html&gt;
+  </script>
+</body>
+</html>

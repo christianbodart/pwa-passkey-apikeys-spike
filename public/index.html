@@ -1,8 +1,8 @@
-&lt;!DOCTYPE html&gt;
-&lt;html&gt;
-&lt;head&gt;
-  &lt;title&gt;Iframe WebAuthn Test&lt;/title&gt;
-  &lt;style&gt;
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Iframe WebAuthn Test</title>
+  <style>
     body { font-family: system-ui; padding: 2rem; margin: 0; }
     iframe { 
       width: 100%; 
@@ -16,26 +16,26 @@
     .green { background: #d4edda; border-left: 4px solid #28a745; }
     .yellow { background: #fff3cd; border-left: 4px solid #ffc107; }
     .red { background: #f8d7da; border-left: 4px solid #dc3545; }
-  &lt;/style&gt;
-&lt;/head&gt;
-&lt;body&gt;
-  &lt;h1&gt;🧪 WebAuthn Iframe Fallback Test&lt;/h1&gt;
+  </style>
+</head>
+<body>
+  <h1>🧪 WebAuthn Iframe Fallback Test</h1>
   
-  &lt;h2&gt;Parent Page (Main)&lt;/h2&gt;
-  &lt;div id="parent-status" class="status"&gt;Loading...&lt;/div&gt;
+  <h2>Parent Page (Main)</h2>
+  <div id="parent-status" class="status">Loading...</div>
   
-  &lt;h2&gt;Iframe (Auth Target)&lt;/h2&gt;
-  &lt;iframe 
+  <h2>Iframe (Auth Target)</h2>
+  <iframe 
     id="auth-iframe" 
     src="./iframe-test.html"
     sandbox="allow-scripts allow-same-origin allow-top-navigation"
     loading="lazy"
-  &gt;&lt;/iframe&gt;
+  ></iframe>
   
-  &lt;h2&gt;Communication Log&lt;/h2&gt;
-  &lt;pre id="messages"&gt;No messages yet&lt;/pre&gt;
+  <h2>Communication Log</h2>
+  <pre id="messages">No messages yet</pre>
   
-  &lt;script&gt;
+  <script>
     // Parent page capability detection
     async function detectCapabilities() {
       const caps = {
@@ -50,9 +50,9 @@
       const className = caps.webauthn ? 'green' : 'red';
       statusEl.className = `status ${className}`;
       statusEl.innerHTML = `
-        &lt;h3&gt;Parent Capabilities&lt;/h3&gt;
-        &lt;pre&gt;${JSON.stringify(caps, null, 2)}&lt;/pre&gt;
-        &lt;p&gt;&lt;strong&gt;Status: ${caps.webauthn ? '✅ WebAuthn Ready' : '❌ Fallback Needed'}&lt;/strong&gt;&lt;/p&gt;
+        <h3>Parent Capabilities</h3>
+        <pre>${JSON.stringify(caps, null, 2)}</pre>
+        <p><strong>Status: ${caps.webauthn ? '✅ WebAuthn Ready' : '❌ Fallback Needed'}</strong></p>
       `;
       
       return caps;
@@ -72,6 +72,6 @@
     
     // Initialize
     detectCapabilities();
-  &lt;/script&gt;
-&lt;/body&gt;
-&lt;/html&gt;
+  </script>
+</body>
+</html>
