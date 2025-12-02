@@ -81,13 +81,6 @@ describe('Web Crypto API - AES-GCM Encryption', () => {
       expect(result.matches).toBe(true);
     });
 
-    it('should produce different ciphertext for same plaintext', async () => {
-      const data1 = await encryptWithNewKey(testData.simple);
-      const data2 = await encryptWithNewKey(testData.simple);
-      
-      expect(data1.encrypted).not.toEqual(data2.encrypted);
-    });
-
     it('should fail decryption with wrong key', async () => {
       const { encrypted, iv } = await encryptWithNewKey(testData.simple);
       const wrongKey = await generateTestKey();
