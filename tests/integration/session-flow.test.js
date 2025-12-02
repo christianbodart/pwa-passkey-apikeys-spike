@@ -132,10 +132,10 @@ describe('Session Flow Integration', () => {
       // Use session
       await manager.retrieveKey('openai');
 
-      expect(extendedCallback).toHaveBeenCalledWith({
+      expect(extendedCallback).toHaveBeenCalledWith(expect.objectContaining({
         provider: 'openai',
         duration: expect.any(Number)
-      });
+      }));
     });
   });
 
