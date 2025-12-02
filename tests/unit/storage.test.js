@@ -12,23 +12,27 @@ import {
 } from '../helpers/storage-helpers.js';
 
 describe('StorageService', () => {
+  let storage;
   let db;
 
   beforeEach(async () => {
-    db = await StorageService.openDatabase();
+    storage = new StorageService();
+    db = await storage.init();
   });
 
   afterEach(async () => {
     if (db) {
       await clearAllRecords(db);
-      db.close();
+    }
+    if (storage) {
+      storage.close();
     }
   });
 
   describe('Database Operations', () => {
     it('should open database successfully', () => {
       expect(db).toBeDefined();
-      expect(db.name).toBe('PasskeyKeyManager');
+      expect(db.name).toBe('pwa-apikeys-v1');
       expect(db.version).toBe(1);
     });
 
@@ -190,7 +194,7 @@ describe('StorageService', () => {
     it('should preserve ArrayBuffer data', async () => {
       const originalData = new Uint8Array([1, 2, 3, 4, 5]);
       const record = createTestRecord('test', {
-        credentialId: originalData.buffer,
+        credentialId: originalData,
         encKeyMaterial: new ArrayBuffer(32),
         iv: new Uint8Array(12),
         encrypted: new ArrayBuffer(64)
