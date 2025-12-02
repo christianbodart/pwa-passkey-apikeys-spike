@@ -6,7 +6,6 @@ const CACHE_SYMBOL = Symbol(crypto.randomUUID().slice(0, 8));
 
 // WeakMap for additional obfuscation
 const cache = new WeakMap();
-const cacheKey = Object.freeze({});
 
 /**
  * Secure in-memory cache with XOR obfuscation
@@ -14,12 +13,16 @@ const cacheKey = Object.freeze({});
  */
 export class SecureCache {
   constructor() {
+    // FIX: Create unique cache key per instance
+    this.cacheKey = Object.freeze({});
+    
     this[CACHE_SYMBOL] = {
       timer: null,
       created: null
     };
-    // FIX: Clear any previous WeakMap reference
-    cache.delete(cacheKey);
+    
+    // Clear any previous reference
+    cache.delete(this.cacheKey);
   }
 
   /**
@@ -32,7 +35,7 @@ export class SecureCache {
   store(value, expiryMs = 15 * 60 * 1000, onExpire = null) {
     try {
       // Clear existing first
-      cache.delete(cacheKey);
+      cache.delete(this.cacheKey);
       
       // XOR encode the value
       const encoder = new TextEncoder();
@@ -44,8 +47,8 @@ export class SecureCache {
         data[i] = bytes[i] ^ pad[i];
       }
       
-      // Store in WeakMap (non-enumerable)
-      cache.set(cacheKey, { pad, data });
+      // Store in WeakMap with instance-specific key
+      cache.set(this.cacheKey, { pad, data });
       
       // Set up auto-expiry
       this[CACHE_SYMBOL].created = Date.now();
@@ -63,11 +66,11 @@ export class SecureCache {
    * @returns {string|null}
    */
   retrieve() {
-    // FIX: Check if timer expired
+    // Check if timer expired
     if (!this[CACHE_SYMBOL]?.timer) return null;
     
     try {
-      const cached = cache.get(cacheKey);
+      const cached = cache.get(this.cacheKey);
       if (!cached) return null;
       
       const { pad, data } = cached;
@@ -91,7 +94,7 @@ export class SecureCache {
    * @returns {boolean}
    */
   has() {
-    return cache.has(cacheKey);
+    return cache.has(this.cacheKey);
   }
 
   /**
@@ -100,14 +103,14 @@ export class SecureCache {
    */
   clear() {
     // Securely overwrite data before clearing
-    const cached = cache.get(cacheKey);
+    const cached = cache.get(this.cacheKey);
     if (cached) {
       // Overwrite with random data
       crypto.getRandomValues(cached.pad);
       crypto.getRandomValues(cached.data);
     }
     
-    cache.delete(cacheKey);
+    cache.delete(this.cacheKey);
     
     if (this[CACHE_SYMBOL]?.timer) {
       clearTimeout(this[CACHE_SYMBOL].timer);
