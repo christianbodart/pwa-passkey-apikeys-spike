@@ -180,13 +180,39 @@ describe('StorageService', () => {
         credentialId: new Uint8Array([1, 2, 3])
       });
       
-      await expect(putRecord(db, testRecord)).rejects.toThrow();
+      // Should throw an error containing information about the operation failing
+      await expect(putRecord(db, testRecord)).rejects.toThrow(/Operation failed after .* retries/);
     });
 
-    it('should timeout on operations that take too long', async () => {
-      // This would require mocking a hung transaction
-      // For now, just verify the timeout wrapper exists
+    it('should reject operations on closed database immediately', async () => {
+      db.close();
+      
+      // Direct transaction should fail immediately
+      const testRecord = createTestRecord('test');
+      
+      const attempt = () => {
+        return new Promise((resolve, reject) => {
+          try {
+            const transaction = db.transaction(['keys'], 'readwrite');
+            const store = transaction.objectStore('keys');
+            const request = store.put(testRecord);
+            
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+            transaction.onerror = () => reject(transaction.error);
+          } catch (error) {
+            reject(error);
+          }
+        });
+      };
+      
+      await expect(attempt()).rejects.toThrow();
+    });
+
+    it('should have timeout protection', async () => {
+      // Verify the timeout wrapper exists
       expect(withTimeout).toBeDefined();
+      expect(typeof withTimeout).toBe('function');
     });
   });
 
