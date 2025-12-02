@@ -1,0 +1,171 @@
+&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+  &lt;title&gt;Iframe WebAuthn Target&lt;/title&gt;
+  &lt;style&gt;
+    body { 
+      font-family: system-ui; 
+      padding: 2rem; 
+      margin: 0; 
+      background: #f8f9fa; 
+      text-align: center;
+    }
+    pre { 
+      background: white; 
+      padding: 1rem; 
+      border-radius: 8px; 
+      text-align: left; 
+      margin: 1rem auto; 
+      max-width: 600px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+      margin: 0.5rem;
+    }
+    button:hover { background: #0056b3; }
+    button:disabled { background: #6c757d; cursor: not-allowed; }
+    .status { 
+      padding: 1rem; 
+      border-radius: 6px; 
+      margin: 1rem 0; 
+      font-weight: bold;
+    }
+    .green { background: #d4edda; color: #155724; border-left: 4px solid #28a745; }
+    .red { background: #f8d7da; color: #721c24; border-left: 4px solid #dc3545; }
+  &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+  &lt;h1&gt;🔐 Iframe WebAuthn Target&lt;/h1&gt;
+  
+  &lt;div id="status" class="status"&gt;Loading...&lt;/div&gt;
+  
+  &lt;h2&gt;Iframe Capabilities&lt;/h2&gt;
+  &lt;pre id="capabilities"&gt;&lt;/pre&gt;
+  
+  &lt;div&gt;
+    &lt;button id="test-webauthn"&gt;🧪 Test WebAuthn&lt;/button&gt;
+    &lt;button id="send-message"&gt;📤 Send Message&lt;/button&gt;
+  &lt;/div&gt;
+  
+  &lt;h3&gt;Messages Sent&lt;/h3&gt;
+  &lt;pre id="messages"&gt;No messages sent&lt;/pre&gt;
+  
+  &lt;script&gt;
+    const statusEl = document.getElementById('status');
+    const capsEl = document.getElementById('capabilities');
+    const messagesEl = document.getElementById('messages');
+    const testBtn = document.getElementById('test-webauthn');
+    const sendBtn = document.getElementById('send-message');
+    
+    let messageCount = 0;
+    
+    // Detect iframe capabilities
+    function detectCapabilities() {
+      const caps = {
+        webauthn: !!window.PublicKeyCredential,
+        subtleCrypto: !!window.crypto?.subtle,
+        postMessage: !!window.parent?.postMessage,
+        visibilityApi: !!document.visibilityState,
+        sandbox: document.sandbox ? Array.from(document.sandbox) : [],
+        timestamp: Date.now(),
+        origin: window.location.origin
+      };
+      
+      capsEl.textContent = JSON.stringify(caps, null, 2);
+      
+      const className = caps.webauthn ? 'green' : 'red';
+      statusEl.className = `status ${className}`;
+      statusEl.textContent = caps.webauthn 
+        ? '✅ WebAuthn Available in Iframe'
+        : '❌ WebAuthn Blocked in Iframe';
+      
+      testBtn.disabled = !caps.webauthn;
+      
+      return caps;
+    }
+    
+    // Test WebAuthn in iframe
+    async function testWebAuthn() {
+      try {
+        testBtn.textContent = 'Testing...';
+        testBtn.disabled = true;
+        
+        if (!window.PublicKeyCredential) {
+          throw new Error('WebAuthn not supported');
+        }
+        
+        // Simple credential creation test
+        const credential = await navigator.credentials.create({
+          publicKey: {
+            challenge: crypto.getRandomValues(new Uint8Array(32)),
+            rp: { name: 'Iframe Test', id: window.location.hostname },
+            user: {
+              id: new TextEncoder().encode('test-user'),
+              name: 'test-user',
+              displayName: 'Test User'
+            },
+            pubKeyCredParams: [{ type: 'public-key', alg: -7 }]
+          }
+        });
+        
+        statusEl.textContent = `✅ Success! Credential ID: ${credential.id.slice(0, 8)}...`;
+        statusEl.className = 'status green';
+        
+        // Send result to parent
+        window.parent.postMessage({
+          type: 'webauthn-success',
+          credentialId: credential.id,
+          timestamp: Date.now()
+        }, '*');
+        
+      } catch (error) {
+        statusEl.textContent = `❌ Failed: ${error.message}`;
+        statusEl.className = 'status red';
+        
+        window.parent.postMessage({
+          type: 'webauthn-error',
+          error: error.message,
+          timestamp: Date.now()
+        }, '*');
+      } finally {
+        testBtn.textContent = '🧪 Test WebAuthn';
+        testBtn.disabled = false;
+      }
+    }
+    
+    // Send test message to parent
+    function sendMessage() {
+      messageCount++;
+      const msg = {
+        type: 'iframe-ping',
+        count: messageCount,
+        timestamp: Date.now(),
+        capabilities: detectCapabilities()
+      };
+      
+      window.parent.postMessage(msg, '*');
+      
+      const messages = JSON.parse(messagesEl.textContent === 'No messages sent' ? '[]' : messagesEl.textContent);
+      messages.unshift(msg);
+      messagesEl.textContent = JSON.stringify(messages.slice(0, 10), null, 2);
+    }
+    
+    // Event listeners
+    testBtn.addEventListener('click', testWebAuthn);
+    sendBtn.addEventListener('click', sendMessage);
+    
+    // Initialize
+    detectCapabilities();
+    
+    // Notify parent iframe is ready
+    window.parent.postMessage({ type: 'iframe-ready', timestamp: Date.now() }, '*');
+  &lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
