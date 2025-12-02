@@ -1,13 +1,21 @@
 // tests/integration/session-flow.test.js
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { PasskeyKeyManager } from '../../src/app.js';
 import { SessionManager } from '../../src/session-manager.js';
 import { StorageService } from '../../src/storage.js';
 import { KeyManager } from '../../src/key-manager.js';
-import { PasskeyService } from '../../src/passkey-service.js';
 import { ProviderService } from '../../src/providers.js';
-import { CapabilityDetector } from '../../src/capability-detector.js';
+import {
+  createMockCapabilityDetector,
+  createMockPasskeyService,
+  expectSessionActive,
+  expectSessionInactive,
+  expectEvent,
+  advanceTime
+} from '../helpers/index.js';
+import { TEST_KEYS, DURATIONS, TEST_DB_NAMES } from '../fixtures/index.js';
 import 'fake-indexeddb/auto';
+import { vi } from 'vitest';
 
 describe('Session Flow Integration', () => {
   let manager;
@@ -17,50 +25,11 @@ describe('Session Flow Integration', () => {
   beforeEach(async () => {
     vi.useFakeTimers();
 
-    // Mock CapabilityDetector to always return green tier
-    mockCapabilityDetector = {
-      detect: vi.fn().mockReturnValue({
-        webauthn: true,
-        subtleCrypto: true,
-        visibilityApi: true,
-        indexedDB: true,
-        timestamp: Date.now()
-      }),
-      getTier: vi.fn().mockReturnValue('green'),
-      getRecommendedConfig: vi.fn().mockReturnValue({
-        sessionDuration: 15 * 60 * 1000,
-        maxOperations: Infinity,
-        autoLock: true
-      }),
-      getStatus: vi.fn().mockReturnValue({
-        emoji: '🔒',
-        title: 'Maximum Security',
-        description: 'Test mode',
-        color: '#4caf50',
-        warnings: []
-      }),
-      getAnalytics: vi.fn().mockReturnValue({
-        tier: 'green',
-        webauthn: true,
-        subtleCrypto: true,
-        visibilityApi: true,
-        indexedDB: true
-      })
-    };
-
-    // Mock PasskeyService
-    mockPasskeyService = {
-      isSupported: () => true,
-      createCredential: vi.fn().mockResolvedValue({
-        rawId: new ArrayBuffer(32)
-      }),
-      authenticate: vi.fn().mockResolvedValue({
-        response: { signature: new ArrayBuffer(64) }
-      })
-    };
+    mockCapabilityDetector = createMockCapabilityDetector('green');
+    mockPasskeyService = createMockPasskeyService();
 
     manager = new PasskeyKeyManager({
-      storage: new StorageService('test-db', 'test-store'),
+      storage: new StorageService(TEST_DB_NAMES.session, 'test-store'),
       keyManager: new KeyManager(),
       providerService: new ProviderService(),
       passkeyService: mockPasskeyService,
@@ -79,9 +48,8 @@ describe('Session Flow Integration', () => {
 
   describe('First Use Flow', () => {
     it('requires passkey auth on first API call', async () => {
-      // Setup
       await manager.createPasskey('openai');
-      await manager.storeKey('openai', 'sk-test-key');
+      await manager.storeKey('openai', TEST_KEYS.openai);
 
       // Clear session to simulate fresh start
       manager.sessionManager.endAllSessions();
@@ -91,24 +59,24 @@ describe('Session Flow Integration', () => {
       const key = await manager.retrieveKey('openai');
 
       expect(mockPasskeyService.authenticate).toHaveBeenCalledOnce();
-      expect(key).toBe('sk-test-key');
+      expect(key).toBe(TEST_KEYS.openai);
     });
 
     it('starts session after first auth', async () => {
       await manager.createPasskey('openai');
-      await manager.storeKey('openai', 'sk-test-key');
+      await manager.storeKey('openai', TEST_KEYS.openai);
 
       manager.sessionManager.endAllSessions();
       await manager.retrieveKey('openai');
 
-      expect(manager.sessionManager.hasSession('openai')).toBe(true);
+      expectSessionActive(manager.sessionManager, 'openai');
     });
   });
 
   describe('Subsequent Use Flow', () => {
     it('does not require passkey auth when session active', async () => {
       await manager.createPasskey('openai');
-      await manager.storeKey('openai', 'sk-test-key');
+      await manager.storeKey('openai', TEST_KEYS.openai);
 
       // Session started by storeKey
       mockPasskeyService.authenticate.mockClear();
@@ -117,7 +85,7 @@ describe('Session Flow Integration', () => {
       const key = await manager.retrieveKey('openai');
 
       expect(mockPasskeyService.authenticate).not.toHaveBeenCalled();
-      expect(key).toBe('sk-test-key');
+      expect(key).toBe(TEST_KEYS.openai);
     });
 
     it('extends session on each use', async () => {
@@ -125,31 +93,27 @@ describe('Session Flow Integration', () => {
       manager.on('sessionExtended', extendedCallback);
 
       await manager.createPasskey('openai');
-      await manager.storeKey('openai', 'sk-test-key');
+      await manager.storeKey('openai', TEST_KEYS.openai);
 
       extendedCallback.mockClear();
-
-      // Use session
       await manager.retrieveKey('openai');
 
-      expect(extendedCallback).toHaveBeenCalledWith(expect.objectContaining({
+      expectEvent(extendedCallback, {
         provider: 'openai',
         duration: expect.any(Number)
-      }));
+      });
     });
   });
 
   describe('Session Expiry Flow', () => {
     it('requires passkey auth after session expires', async () => {
       await manager.createPasskey('openai');
-      await manager.storeKey('openai', 'sk-test-key');
+      await manager.storeKey('openai', TEST_KEYS.openai);
 
-      // Fast forward past expiry (15 minutes default)
-      vi.advanceTimersByTime(15 * 60 * 1000 + 1000);
+      // Fast forward past expiry
+      advanceTime(DURATIONS.sessionExpiry);
 
       mockPasskeyService.authenticate.mockClear();
-
-      // Should require auth again
       await manager.retrieveKey('openai');
 
       expect(mockPasskeyService.authenticate).toHaveBeenCalledOnce();
@@ -160,29 +124,29 @@ describe('Session Flow Integration', () => {
       manager.on('sessionExpired', expiredCallback);
 
       await manager.createPasskey('openai');
-      await manager.storeKey('openai', 'sk-test-key');
+      await manager.storeKey('openai', TEST_KEYS.openai);
 
-      vi.advanceTimersByTime(15 * 60 * 1000 + 1000);
+      advanceTime(DURATIONS.sessionExpiry);
 
-      expect(expiredCallback).toHaveBeenCalledWith({ provider: 'openai' });
+      expectEvent(expiredCallback, { provider: 'openai' });
     });
   });
 
   describe('Manual Lock Flow', () => {
     it('clears session when locked', async () => {
       await manager.createPasskey('openai');
-      await manager.storeKey('openai', 'sk-test-key');
+      await manager.storeKey('openai', TEST_KEYS.openai);
 
-      expect(manager.sessionManager.hasSession('openai')).toBe(true);
+      expectSessionActive(manager.sessionManager, 'openai');
 
       manager.lockSession('openai');
 
-      expect(manager.sessionManager.hasSession('openai')).toBe(false);
+      expectSessionInactive(manager.sessionManager, 'openai');
     });
 
     it('requires passkey auth after manual lock', async () => {
       await manager.createPasskey('openai');
-      await manager.storeKey('openai', 'sk-test-key');
+      await manager.storeKey('openai', TEST_KEYS.openai);
 
       manager.lockSession('openai');
       mockPasskeyService.authenticate.mockClear();
@@ -194,48 +158,47 @@ describe('Session Flow Integration', () => {
 
     it('locks all sessions', async () => {
       await manager.createPasskey('openai');
-      await manager.storeKey('openai', 'sk-test-key-1');
+      await manager.storeKey('openai', TEST_KEYS.openai);
 
       await manager.createPasskey('anthropic');
-      await manager.storeKey('anthropic', 'sk-test-key-2');
+      await manager.storeKey('anthropic', TEST_KEYS.anthropic);
 
       manager.lockAllSessions();
 
-      expect(manager.sessionManager.hasSession('openai')).toBe(false);
-      expect(manager.sessionManager.hasSession('anthropic')).toBe(false);
+      expectSessionInactive(manager.sessionManager, 'openai');
+      expectSessionInactive(manager.sessionManager, 'anthropic');
     });
   });
 
   describe('Multi-Provider Sessions', () => {
     it('manages independent sessions per provider', async () => {
       await manager.createPasskey('openai');
-      await manager.storeKey('openai', 'sk-openai-key');
+      await manager.storeKey('openai', TEST_KEYS.openai);
 
       await manager.createPasskey('anthropic');
-      await manager.storeKey('anthropic', 'sk-anthropic-key');
+      await manager.storeKey('anthropic', TEST_KEYS.anthropic);
 
-      expect(manager.sessionManager.hasSession('openai')).toBe(true);
-      expect(manager.sessionManager.hasSession('anthropic')).toBe(true);
+      expectSessionActive(manager.sessionManager, 'openai');
+      expectSessionActive(manager.sessionManager, 'anthropic');
     });
 
     it('retrieves correct key per provider', async () => {
       await manager.createPasskey('openai');
-      await manager.storeKey('openai', 'sk-openai-key');
+      await manager.storeKey('openai', TEST_KEYS.openai);
 
       await manager.createPasskey('anthropic');
-      await manager.storeKey('anthropic', 'sk-anthropic-key');
+      await manager.storeKey('anthropic', TEST_KEYS.anthropic);
 
       mockPasskeyService.authenticate.mockClear();
 
-      expect(await manager.retrieveKey('openai')).toBe('sk-openai-key');
-      expect(await manager.retrieveKey('anthropic')).toBe('sk-anthropic-key');
+      expect(await manager.retrieveKey('openai')).toBe(TEST_KEYS.openai);
+      expect(await manager.retrieveKey('anthropic')).toBe(TEST_KEYS.anthropic);
       expect(mockPasskeyService.authenticate).not.toHaveBeenCalled();
     });
   });
 
   describe('Capability Detection', () => {
     it('emits capabilityDetected event on init', async () => {
-      // Already initialized in beforeEach, check that mock was called
       expect(mockCapabilityDetector.detect).toHaveBeenCalled();
       expect(mockCapabilityDetector.getTier).toHaveBeenCalled();
     });
